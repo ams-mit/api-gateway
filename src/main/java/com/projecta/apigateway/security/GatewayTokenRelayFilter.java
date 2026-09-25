@@ -13,6 +13,10 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+/**
+ * Replaces the caller's Authorization header with a Gateway-signed JWT. The original User/Service
+ * JWT is never forwarded downstream; on public routes any caller-supplied Authorization is removed.
+ */
 @Component
 public class GatewayTokenRelayFilter implements GlobalFilter, Ordered {
 
@@ -30,36 +34,33 @@ public class GatewayTokenRelayFilter implements GlobalFilter, Ordered {
         String tokenType = exchange.getAttribute(JwtAuthenticationFilter.ATTR_TOKEN_TYPE);
 
         if (subject == null || tokenType == null) {
-            logger.debug("Unauthenticated request or public route, passing downstream unchanged");
-            return chain.filter(exchange);
+            logger.debug("Unauthenticated public route, forwarding without Authorization header");
+            ServerHttpRequest stripped = exchange.getRequest().mutate()
+                    .headers(headers -> headers.remove(HttpHeaders.AUTHORIZATION))
+                    .build();
+            return chain.filter(exchange.mutate().request(stripped).build());
         }
 
-        List<?> roles = exchange.getAttribute(JwtAuthenticationFilter.ATTR_ROLES);
         String gatewayJwt;
-
-        if ("user".equalsIgnoreCase(tokenType)) {
+        if (JwtAuthenticationFilter.TYPE_USER.equals(tokenType)) {
+            List<String> roles = exchange.getAttribute(JwtAuthenticationFilter.ATTR_ROLES);
             gatewayJwt = gatewayJwtSigner.generateGatewayUserToken(subject, roles);
         } else {
             gatewayJwt = gatewayJwtSigner.generateGatewayServiceToken(subject);
         }
 
-        // Mutate request headers: replace Authorization header with Gateway-signed JWT
         ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + gatewayJwt)
+                .headers(headers -> headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + gatewayJwt))
                 .build();
 
         logger.debug("Re-signed token for subject '{}' ({}), replacing Bearer header for downstream request", subject, tokenType);
 
-        ServerWebExchange mutatedExchange = exchange.mutate()
-                .request(mutatedRequest)
-                .build();
-
-        return chain.filter(mutatedExchange);
+        return chain.filter(exchange.mutate().request(mutatedRequest).build());
     }
 
     @Override
     public int getOrder() {
-        // Runs immediately after JwtAuthenticationFilter (Ordered.HIGHEST_PRECEDENCE + 20)
+        // Runs immediately after JwtAuthenticationFilter (Ordered.HIGHEST_PRECEDENCE + 10)
         return Ordered.HIGHEST_PRECEDENCE + 20;
     }
 }

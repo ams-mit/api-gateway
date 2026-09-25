@@ -2,14 +2,16 @@ package com.projecta.apigateway.security;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ResourceLoader;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.core.io.DefaultResourceLoader;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
 
 class KeyResolverServiceTest {
 
@@ -18,8 +20,7 @@ class KeyResolverServiceTest {
 
     @BeforeEach
     void setUp() {
-        ResourceLoader resourceLoader = mock(ResourceLoader.class);
-        keyResolverService = new KeyResolverService(resourceLoader);
+        keyResolverService = new KeyResolverService(new DefaultResourceLoader());
         testKeyPair = TestKeyUtils.generateRsaKeyPair();
     }
 
@@ -28,7 +29,6 @@ class KeyResolverServiceTest {
         String pem = TestKeyUtils.toPemPublicKey(testKeyPair);
         PublicKey publicKey = keyResolverService.parsePublicKey(pem);
 
-        assertNotNull(publicKey);
         assertEquals("RSA", publicKey.getAlgorithm());
         assertArrayEquals(testKeyPair.getPublic().getEncoded(), publicKey.getEncoded());
     }
@@ -38,7 +38,6 @@ class KeyResolverServiceTest {
         String pem = TestKeyUtils.toPemPrivateKey(testKeyPair);
         PrivateKey privateKey = keyResolverService.parsePrivateKey(pem);
 
-        assertNotNull(privateKey);
         assertEquals("RSA", privateKey.getAlgorithm());
         assertArrayEquals(testKeyPair.getPrivate().getEncoded(), privateKey.getEncoded());
     }
@@ -47,5 +46,30 @@ class KeyResolverServiceTest {
     void parsePublicKey_throwsIllegalArgumentException_whenPemIsInvalid() {
         String invalidPem = "-----BEGIN PUBLIC KEY-----\nINVALID_BASE64_DATA\n-----END PUBLIC KEY-----";
         assertThrows(IllegalArgumentException.class, () -> keyResolverService.parsePublicKey(invalidPem));
+    }
+
+    @Test
+    void resolvePublicKey_acceptsInlinePemWithEscapedNewlines() {
+        String envStylePem = TestKeyUtils.toPemPublicKey(testKeyPair).replace("\n", "\\n");
+
+        PublicKey publicKey = keyResolverService.resolvePublicKey(envStylePem);
+
+        assertArrayEquals(testKeyPair.getPublic().getEncoded(), publicKey.getEncoded());
+    }
+
+    @Test
+    void resolvePrivateKey_readsFileLocation(@TempDir Path dir) throws Exception {
+        Path keyFile = dir.resolve("gateway_private.pem");
+        Files.writeString(keyFile, TestKeyUtils.toPemPrivateKey(testKeyPair));
+
+        PrivateKey privateKey = keyResolverService.resolvePrivateKey(keyFile.toUri().toString());
+
+        assertArrayEquals(testKeyPair.getPrivate().getEncoded(), privateKey.getEncoded());
+    }
+
+    @Test
+    void resolvePublicKey_failsForMissingLocationOrBlankValue() {
+        assertThrows(IllegalArgumentException.class, () -> keyResolverService.resolvePublicKey("classpath:keys/missing.pem"));
+        assertThrows(IllegalArgumentException.class, () -> keyResolverService.resolvePublicKey(" "));
     }
 }

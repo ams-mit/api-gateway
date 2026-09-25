@@ -2,15 +2,17 @@ package com.projecta.apigateway.security;
 
 import com.projecta.apigateway.config.SecurityProperties;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
 
 class GatewayJwtSignerTest {
 
@@ -19,12 +21,12 @@ class GatewayJwtSignerTest {
 
     @BeforeEach
     void setUp() {
-        SecurityProperties securityProperties = new SecurityProperties();
-        KeyResolverService keyResolverService = mock(KeyResolverService.class);
         gatewayKeyPair = TestKeyUtils.generateRsaKeyPair();
+        JwtKeyStore keyStore = new JwtKeyStore(TestKeyUtils.generateRsaKeyPair().getPublic(), gatewayKeyPair.getPrivate(), Map.of());
 
-        gatewayJwtSigner = new GatewayJwtSigner(securityProperties, keyResolverService);
-        gatewayJwtSigner.setGatewayPrivateKey(gatewayKeyPair.getPrivate());
+        SecurityProperties securityProperties = new SecurityProperties();
+        securityProperties.getJwt().setGatewayTokenTtl(Duration.ofMinutes(5));
+        gatewayJwtSigner = new GatewayJwtSigner(keyStore, securityProperties);
     }
 
     @Test
@@ -34,20 +36,18 @@ class GatewayJwtSignerTest {
 
         String token = gatewayJwtSigner.generateGatewayUserToken(subject, roles);
 
-        assertNotNull(token);
-
-        Claims claims = Jwts.parser()
+        Jws<Claims> jws = Jwts.parser()
                 .verifyWith(gatewayKeyPair.getPublic())
                 .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                .parseSignedClaims(token);
+        Claims claims = jws.getPayload();
 
+        assertEquals("RS256", jws.getHeader().getAlgorithm());
+        assertEquals("JWT", jws.getHeader().getType());
         assertEquals(subject, claims.getSubject());
         assertEquals("user", claims.get("type", String.class));
         assertEquals(roles, claims.get("roles", List.class));
-        assertNotNull(claims.getIssuedAt());
-        assertNotNull(claims.getExpiration());
-        assertTrue(claims.getExpiration().after(claims.getIssuedAt()));
+        assertEquals(300_000L, claims.getExpiration().getTime() - claims.getIssuedAt().getTime());
     }
 
     @Test
@@ -55,8 +55,6 @@ class GatewayJwtSignerTest {
         String serviceName = "resident-management-service";
 
         String token = gatewayJwtSigner.generateGatewayServiceToken(serviceName);
-
-        assertNotNull(token);
 
         Claims claims = Jwts.parser()
                 .verifyWith(gatewayKeyPair.getPublic())
@@ -67,5 +65,14 @@ class GatewayJwtSignerTest {
         assertEquals(serviceName, claims.getSubject());
         assertEquals("service", claims.get("type", String.class));
         assertNull(claims.get("roles"));
+    }
+
+    @Test
+    void constructor_rejectsNonPositiveTtl() {
+        JwtKeyStore keyStore = new JwtKeyStore(gatewayKeyPair.getPublic(), gatewayKeyPair.getPrivate(), Map.of());
+        SecurityProperties properties = new SecurityProperties();
+        properties.getJwt().setGatewayTokenTtl(Duration.ZERO);
+
+        assertThrows(IllegalStateException.class, () -> new GatewayJwtSigner(keyStore, properties));
     }
 }

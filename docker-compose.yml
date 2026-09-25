@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api-gateway:
     build:
@@ -9,19 +7,26 @@ services:
     ports:
       - "${SERVER_PORT:-8080}:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-docker}
-      - SERVER_PORT=8080
-      - PROJECTA_SERVICES_IDENTITY_ACCESS=${IDENTITY_ACCESS_URL:-http://identity-access-service:8081}
-      - PROJECTA_SERVICES_RESIDENT_MANAGEMENT=${RESIDENT_MANAGEMENT_URL:-http://resident-management-service:8082}
-      - PROJECTA_SERVICES_PROPERTY_UNIT=${PROPERTY_UNIT_URL:-http://property-unit-service:8083}
-      - PROJECTA_SERVICES_LEASE_OCCUPANCY=${LEASE_OCCUPANCY_URL:-http://lease-occupancy-service:8084}
-      - PROJECTA_SERVICES_BILLING_PAYMENT=${BILLING_PAYMENT_URL:-http://billing-payment-service:8085}
-      - PROJECTA_SERVICES_UTILITY_CHARGE=${UTILITY_CHARGE_URL:-http://utility-charge-service:8086}
-      - PROJECTA_SERVICES_OPERATIONS=${OPERATIONS_URL:-http://operations-service:8087}
-      - PROJECTA_SERVICES_COMMUNITY=${COMMUNITY_URL:-http://community-service:8088}
-      - PROJECTA_SECURITY_IDENTITY_PUBLIC_KEY=${PROJECTA_SECURITY_IDENTITY_PUBLIC_KEY:-""}
-      - PROJECTA_SECURITY_GATEWAY_PRIVATE_KEY=${PROJECTA_SECURITY_GATEWAY_PRIVATE_KEY:-""}
-      - PROJECTA_SECURITY_GATEWAY_PUBLIC_KEY=${PROJECTA_SECURITY_GATEWAY_PUBLIC_KEY:-""}
+      SERVER_PORT: "8080"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      # Downstream service URLs (names match application.yml placeholders)
+      IDENTITY_ACCESS_SERVICE_URL: ${IDENTITY_ACCESS_SERVICE_URL:-http://identity-access-service:3001}
+      RESIDENT_MANAGEMENT_SERVICE_URL: ${RESIDENT_MANAGEMENT_SERVICE_URL:-http://resident-management-service:3002}
+      PROPERTY_UNIT_SERVICE_URL: ${PROPERTY_UNIT_SERVICE_URL:-http://property-unit-service:3003}
+      LEASE_OCCUPANCY_SERVICE_URL: ${LEASE_OCCUPANCY_SERVICE_URL:-http://lease-occupancy-service:3004}
+      BILLING_PAYMENT_SERVICE_URL: ${BILLING_PAYMENT_SERVICE_URL:-http://billing-payment-service:3005}
+      UTILITY_CHARGE_SERVICE_URL: ${UTILITY_CHARGE_SERVICE_URL:-http://utility-charge-service:3006}
+      OPERATIONS_SERVICE_URL: ${OPERATIONS_SERVICE_URL:-http://operations-service:3007}
+      COMMUNITY_SERVICE_URL: ${COMMUNITY_SERVICE_URL:-http://community-service:3008}
+      # RSA keys: a location (file:/app/keys/...) or inline PEM. Defaults read the mounted ./keys directory.
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:-file:/app/keys/identity_public.pem}
+      GATEWAY_JWT_PRIVATE_KEY: ${GATEWAY_JWT_PRIVATE_KEY:-file:/app/keys/gateway_private.pem}
+      GATEWAY_JWT_EXPIRES_IN: ${GATEWAY_JWT_EXPIRES_IN:-5m}
+      IDENTITY_ACCESS_SERVICE_PUBLIC_KEY: ${IDENTITY_ACCESS_SERVICE_PUBLIC_KEY:-}
+      RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY: ${RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY:-}
+    volumes:
+      - ./keys:/app/keys:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
       interval: 30s

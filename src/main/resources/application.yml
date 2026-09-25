@@ -6,122 +6,129 @@ spring:
     name: api-gateway
   cloud:
     gateway:
-      httpclient:
-        connect-timeout: 3000
-        response-timeout: 5s
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowed-origins: "${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}"
-            allowed-methods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - PATCH
-              - OPTIONS
-            allowed-headers: "*"
-            allow-credentials: true
-      routes:
-        # --- Group 1: Identity & Access Service ---
-        - id: identity-access-auth-login
-          uri: ${projecta.services.identity-access}
-          predicates:
-            - Path=/api/v1/auth/login
+      # Spring Cloud Gateway 5.x only reads the server.webflux prefix
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:2000}
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:5s}
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}"
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - PATCH
+                  - OPTIONS
+                allowed-headers: "*"
+                allow-credentials: true
+          routes:
+            # --- Group 1: Identity & Access Service (06-ROUTE-REGISTRY §44) ---
+            - id: identity-access-auth
+              uri: ${projecta.services.identity-access}
+              predicates:
+                - Path=/api/v1/auth/**
 
-        - id: identity-access-auth-register
-          uri: ${projecta.services.identity-access}
-          predicates:
-            - Path=/api/v1/auth/register
+            - id: identity-access-profile
+              uri: ${projecta.services.identity-access}
+              predicates:
+                - Path=/api/v1/profile/**
 
-        - id: identity-access-users
-          uri: ${projecta.services.identity-access}
-          predicates:
-            - Path=/api/v1/users/**
+            - id: identity-access-admin-users
+              uri: ${projecta.services.identity-access}
+              predicates:
+                - Path=/api/v1/admin/users/**
 
-        - id: identity-access-roles
-          uri: ${projecta.services.identity-access}
-          predicates:
-            - Path=/api/v1/roles/**
+            - id: identity-access-admin-roles
+              uri: ${projecta.services.identity-access}
+              predicates:
+                - Path=/api/v1/admin/roles/**
 
-        # --- Group 1: Resident Management Service ---
-        - id: resident-management-residents
-          uri: ${projecta.services.resident-management}
-          predicates:
-            - Path=/api/v1/residents/**
+            # --- Group 1: Resident Management Service ---
+            - id: resident-management-residents
+              uri: ${projecta.services.resident-management}
+              predicates:
+                - Path=/api/v1/residents/**
 
-        - id: resident-management-owners
-          uri: ${projecta.services.resident-management}
-          predicates:
-            - Path=/api/v1/owners/**
+            - id: resident-management-owners
+              uri: ${projecta.services.resident-management}
+              predicates:
+                - Path=/api/v1/owners/**
 
-        - id: resident-management-tenants
-          uri: ${projecta.services.resident-management}
-          predicates:
-            - Path=/api/v1/tenants/**
+            - id: resident-management-tenants
+              uri: ${projecta.services.resident-management}
+              predicates:
+                - Path=/api/v1/tenants/**
 
-        - id: resident-management-staff
-          uri: ${projecta.services.resident-management}
-          predicates:
-            - Path=/api/v1/staff/**
+            - id: resident-management-staff
+              uri: ${projecta.services.resident-management}
+              predicates:
+                - Path=/api/v1/staff/**
 
-        # --- Group 2: Property & Lease Services ---
-        - id: property-unit-properties
-          uri: ${projecta.services.property-unit}
-          predicates:
-            - Path=/api/v1/properties/**
+            # --- Groups 2-4: PLACEHOLDER routes, not yet backed by an agreed API contract.
+            # Kept by developer decision (see .ai/11-DECISIONS.md); replace with the
+            # confirmed method/path entries when each team publishes its contract.
 
-        - id: property-unit-units
-          uri: ${projecta.services.property-unit}
-          predicates:
-            - Path=/api/v1/units/**
+            # --- Group 2: Property & Lease Services ---
+            - id: property-unit-properties
+              uri: ${projecta.services.property-unit}
+              predicates:
+                - Path=/api/v1/properties/**
 
-        - id: lease-occupancy-leases
-          uri: ${projecta.services.lease-occupancy}
-          predicates:
-            - Path=/api/v1/leases/**
+            - id: property-unit-units
+              uri: ${projecta.services.property-unit}
+              predicates:
+                - Path=/api/v1/units/**
 
-        - id: lease-occupancy-occupancies
-          uri: ${projecta.services.lease-occupancy}
-          predicates:
-            - Path=/api/v1/occupancies/**
+            - id: lease-occupancy-leases
+              uri: ${projecta.services.lease-occupancy}
+              predicates:
+                - Path=/api/v1/leases/**
 
-        # --- Group 3: Billing & Utility Services ---
-        - id: billing-payment-billing
-          uri: ${projecta.services.billing-payment}
-          predicates:
-            - Path=/api/v1/billing/**
+            - id: lease-occupancy-occupancies
+              uri: ${projecta.services.lease-occupancy}
+              predicates:
+                - Path=/api/v1/occupancies/**
 
-        - id: billing-payment-payments
-          uri: ${projecta.services.billing-payment}
-          predicates:
-            - Path=/api/v1/payments/**
+            # --- Group 3: Billing & Utility Services ---
+            - id: billing-payment-billing
+              uri: ${projecta.services.billing-payment}
+              predicates:
+                - Path=/api/v1/billing/**
 
-        - id: utility-charge-utilities
-          uri: ${projecta.services.utility-charge}
-          predicates:
-            - Path=/api/v1/utilities/**
+            - id: billing-payment-payments
+              uri: ${projecta.services.billing-payment}
+              predicates:
+                - Path=/api/v1/payments/**
 
-        # --- Group 4: Operations & Community Services ---
-        - id: operations-operations
-          uri: ${projecta.services.operations}
-          predicates:
-            - Path=/api/v1/operations/**
+            - id: utility-charge-utilities
+              uri: ${projecta.services.utility-charge}
+              predicates:
+                - Path=/api/v1/utilities/**
 
-        - id: operations-maintenance
-          uri: ${projecta.services.operations}
-          predicates:
-            - Path=/api/v1/maintenance/**
+            # --- Group 4: Operations & Community Services ---
+            - id: operations-operations
+              uri: ${projecta.services.operations}
+              predicates:
+                - Path=/api/v1/operations/**
 
-        - id: community-community
-          uri: ${projecta.services.community}
-          predicates:
-            - Path=/api/v1/community/**
+            - id: operations-maintenance
+              uri: ${projecta.services.operations}
+              predicates:
+                - Path=/api/v1/maintenance/**
 
-        - id: community-announcements
-          uri: ${projecta.services.community}
-          predicates:
-            - Path=/api/v1/announcements/**
+            - id: community-community
+              uri: ${projecta.services.community}
+              predicates:
+                - Path=/api/v1/community/**
+
+            - id: community-announcements
+              uri: ${projecta.services.community}
+              predicates:
+                - Path=/api/v1/announcements/**
 
 # Project A Microservice Target URLs & Security Settings
 projecta:
@@ -136,26 +143,32 @@ projecta:
     community: ${COMMUNITY_SERVICE_URL:http://localhost:3008}
 
   security:
+    # Gateway routes that skip JWT authentication (exact method-agnostic path patterns)
     public-paths:
       - /api/v1/auth/login
       - /api/v1/auth/register
-      - /actuator/**
     jwt:
-      identity-public-key-path: ${IDENTITY_PUBLIC_KEY_PATH:classpath:keys/identity_public.pem}
-      gateway-private-key-path: ${GATEWAY_PRIVATE_KEY_PATH:classpath:keys/gateway_private.pem}
-      gateway-public-key-path: ${GATEWAY_PUBLIC_KEY_PATH:classpath:keys/gateway_public.pem}
+      # Each key value may be a resource location (file:/..., classpath:...) or the PEM text itself.
+      identity-public-key: ${IDENTITY_JWT_PUBLIC_KEY:classpath:keys/identity_public.pem}
+      gateway-private-key: ${GATEWAY_JWT_PRIVATE_KEY:classpath:keys/gateway_private.pem}
+      gateway-token-ttl: ${GATEWAY_JWT_EXPIRES_IN:5m}
+      # Registered callers allowed to send Service JWTs. Blank entries are ignored,
+      # so a service is only trusted once its public key is configured.
+      service-public-keys:
+        identity-access-service: ${IDENTITY_ACCESS_SERVICE_PUBLIC_KEY:}
+        resident-management-service: ${RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY:}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info
   endpoint:
     health:
-      show-details: always
+      show-details: never
 
 logging:
   level:
     root: INFO
-    com.projecta.apigateway: DEBUG
+    com.projecta.apigateway: INFO
     org.springframework.cloud.gateway: INFO

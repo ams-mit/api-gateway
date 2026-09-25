@@ -8,6 +8,9 @@ COPY pom.xml .
 COPY .mvn .mvn
 COPY mvnw .
 
+# Checkouts on Windows/CI may lose the executable bit
+RUN chmod +x mvnw
+
 # Download dependencies offline
 RUN ./mvnw dependency:go-offline -B
 

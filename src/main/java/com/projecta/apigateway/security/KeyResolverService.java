@@ -15,53 +15,58 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
+/**
+ * Loads RSA keys from configuration. A configured value may be either a resource location
+ * ({@code file:...}, {@code classpath:...}) or the key material itself (PEM text, or the bare
+ * base64 body of a PEM), so keys can be mounted as files or injected via environment variables.
+ */
 @Service
 public class KeyResolverService {
 
     private static final Logger logger = LoggerFactory.getLogger(KeyResolverService.class);
+    private static final String PEM_MARKER = "-----BEGIN";
+
     private final ResourceLoader resourceLoader;
 
     public KeyResolverService(ResourceLoader resourceLoader) {
         this.resourceLoader = resourceLoader;
     }
 
-    public PublicKey loadPublicKeyFromLocation(String location) {
-        try {
-            Resource resource = resourceLoader.getResource(location);
-            try (InputStream is = resource.getInputStream()) {
-                String pemContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                return parsePublicKey(pemContent);
-            }
+    public PublicKey resolvePublicKey(String value) {
+        return parsePublicKey(readKeyMaterial(value));
+    }
+
+    public PrivateKey resolvePrivateKey(String value) {
+        return parsePrivateKey(readKeyMaterial(value));
+    }
+
+    private String readKeyMaterial(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("RSA key value is not configured");
+        }
+        String trimmed = value.trim();
+        if (trimmed.contains(PEM_MARKER) || !looksLikeLocation(trimmed)) {
+            return trimmed;
+        }
+        Resource resource = resourceLoader.getResource(trimmed);
+        try (InputStream is = resource.getInputStream()) {
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
         } catch (Exception e) {
-            logger.error("Failed to load public key from location {}: {}", location, e.getMessage());
-            throw new IllegalArgumentException("Unable to load RSA public key from location: " + location, e);
+            // Location is not secret, key content is never logged
+            logger.error("Failed to read RSA key from location {}: {}", trimmed, e.getMessage());
+            throw new IllegalArgumentException("Unable to read RSA key from location: " + trimmed, e);
         }
     }
 
-    public PrivateKey loadPrivateKeyFromLocation(String location) {
-        try {
-            Resource resource = resourceLoader.getResource(location);
-            try (InputStream is = resource.getInputStream()) {
-                String pemContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                return parsePrivateKey(pemContent);
-            }
-        } catch (Exception e) {
-            logger.error("Failed to load private key from location {}: {}", location, e.getMessage());
-            throw new IllegalArgumentException("Unable to load RSA private key from location: " + location, e);
-        }
+    private boolean looksLikeLocation(String value) {
+        return value.startsWith("classpath:") || value.startsWith("file:")
+                || value.startsWith("/") || value.startsWith("./") || value.endsWith(".pem");
     }
 
     public PublicKey parsePublicKey(String pemContent) {
         try {
-            String publicKeyPEM = pemContent
-                    .replace("-----BEGIN PUBLIC KEY-----", "")
-                    .replace("-----END PUBLIC KEY-----", "")
-                    .replaceAll("\\s+", "");
-
-            byte[] encoded = Base64.getDecoder().decode(publicKeyPEM);
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            X509EncodedKeySpec keySpec = new X509EncodedKeySpec(encoded);
-            return keyFactory.generatePublic(keySpec);
+            byte[] encoded = decodePem(pemContent, "PUBLIC KEY");
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(encoded));
         } catch (Exception e) {
             logger.error("Error parsing RSA Public Key PEM: {}", e.getMessage());
             throw new IllegalArgumentException("Invalid RSA Public Key PEM format", e);
@@ -70,18 +75,21 @@ public class KeyResolverService {
 
     public PrivateKey parsePrivateKey(String pemContent) {
         try {
-            String privateKeyPEM = pemContent
-                    .replace("-----BEGIN PRIVATE KEY-----", "")
-                    .replace("-----END PRIVATE KEY-----", "")
-                    .replaceAll("\\s+", "");
-
-            byte[] encoded = Base64.getDecoder().decode(privateKeyPEM);
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(encoded);
-            return keyFactory.generatePrivate(keySpec);
+            byte[] encoded = decodePem(pemContent, "PRIVATE KEY");
+            return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(encoded));
         } catch (Exception e) {
             logger.error("Error parsing RSA Private Key PEM: {}", e.getMessage());
-            throw new IllegalArgumentException("Invalid RSA Private Key PEM format", e);
+            throw new IllegalArgumentException("Invalid RSA Private Key PEM (PKCS#8 expected)", e);
         }
+    }
+
+    private byte[] decodePem(String pemContent, String label) {
+        String body = pemContent
+                .replace("-----BEGIN " + label + "-----", "")
+                .replace("-----END " + label + "-----", "")
+                // Env vars often carry PEM newlines as a literal "\n"
+                .replace("\\n", "")
+                .replaceAll("\\s+", "");
+        return Base64.getDecoder().decode(body);
     }
 }

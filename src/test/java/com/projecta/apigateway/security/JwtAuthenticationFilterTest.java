@@ -2,6 +2,8 @@ package com.projecta.apigateway.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.projecta.apigateway.config.SecurityProperties;
+import com.projecta.apigateway.exception.ErrorResponseWriter;
+import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,9 +16,12 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,31 +29,34 @@ import static org.mockito.Mockito.*;
 
 class JwtAuthenticationFilterTest {
 
+    private static final String RESIDENT_SERVICE = "resident-management-service";
+
     private JwtAuthenticationFilter jwtAuthenticationFilter;
-    private SecurityProperties securityProperties;
-    private KeyResolverService keyResolverService;
     private GatewayFilterChain filterChain;
-    private KeyPair testKeyPair;
+    private KeyPair identityKeys;
+    private KeyPair residentServiceKeys;
 
     @BeforeEach
     void setUp() {
-        securityProperties = new SecurityProperties();
-        securityProperties.setPublicPaths(List.of("/api/v1/auth/login", "/api/v1/auth/register", "/actuator/**"));
+        SecurityProperties securityProperties = new SecurityProperties();
+        securityProperties.setPublicPaths(List.of("/api/v1/auth/login", "/api/v1/auth/register"));
 
-        keyResolverService = mock(KeyResolverService.class);
         filterChain = mock(GatewayFilterChain.class);
         when(filterChain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
 
-        testKeyPair = TestKeyUtils.generateRsaKeyPair();
+        identityKeys = TestKeyUtils.generateRsaKeyPair();
+        residentServiceKeys = TestKeyUtils.generateRsaKeyPair();
+        JwtKeyStore keyStore = new JwtKeyStore(identityKeys.getPublic(), TestKeyUtils.generateRsaKeyPair().getPrivate(),
+                Map.of(RESIDENT_SERVICE, residentServiceKeys.getPublic()));
 
-        jwtAuthenticationFilter = new JwtAuthenticationFilter(securityProperties, keyResolverService, new ObjectMapper());
-        jwtAuthenticationFilter.setIdentityPublicKey(testKeyPair.getPublic());
+        ObjectMapper objectMapper = new ObjectMapper();
+        jwtAuthenticationFilter = new JwtAuthenticationFilter(securityProperties, keyStore, objectMapper,
+                new ErrorResponseWriter(objectMapper));
     }
 
     @Test
     void filter_bypassesAuthentication_forPublicPath() {
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/auth/login").build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/auth/login").build());
 
         jwtAuthenticationFilter.filter(exchange, filterChain).block();
 
@@ -57,104 +65,189 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void filter_returnsUnauthorized_whenAuthHeaderIsMissing() {
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/residents").build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/residents").build());
 
         jwtAuthenticationFilter.filter(exchange, filterChain).block();
 
-        verifyNoInteractions(filterChain);
-        assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+        assertRejected(exchange);
+    }
+
+    @Test
+    void filter_returnsUnauthorized_whenTokenIsMalformed() {
+        assertRejected(runWithToken("not-a-jwt"));
+        assertRejected(runWithToken("a.b.c"));
     }
 
     @Test
     void filter_returnsUnauthorized_whenTokenIsExpired() {
-        String expiredToken = Jwts.builder()
-                .subject("user_123")
-                .claim("type", "user")
+        String token = userToken()
                 .issuedAt(new Date(System.currentTimeMillis() - 10000))
                 .expiration(new Date(System.currentTimeMillis() - 1000))
-                .signWith(testKeyPair.getPrivate(), Jwts.SIG.RS256)
+                .signWith(identityKeys.getPrivate(), Jwts.SIG.RS256)
                 .compact();
 
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/residents")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + expiredToken)
-                .build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
-
-        jwtAuthenticationFilter.filter(exchange, filterChain).block();
-
-        verifyNoInteractions(filterChain);
-        assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+        assertRejected(runWithToken(token));
     }
 
     @Test
     void filter_returnsUnauthorized_whenSignatureIsInvalid() {
-        KeyPair anotherKeyPair = TestKeyUtils.generateRsaKeyPair();
-        String tamperedToken = Jwts.builder()
-                .subject("user_123")
-                .claim("type", "user")
-                .expiration(new Date(System.currentTimeMillis() + 60000))
-                .signWith(anotherKeyPair.getPrivate(), Jwts.SIG.RS256)
+        String token = userToken()
+                .signWith(TestKeyUtils.generateRsaKeyPair().getPrivate(), Jwts.SIG.RS256)
                 .compact();
 
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/residents")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tamperedToken)
-                .build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        assertRejected(runWithToken(token));
+    }
 
-        jwtAuthenticationFilter.filter(exchange, filterChain).block();
+    @Test
+    void filter_returnsUnauthorized_whenAlgorithmIsNotRs256() {
+        String rs512 = userToken().signWith(identityKeys.getPrivate(), Jwts.SIG.RS512).compact();
+        String ps256 = userToken().signWith(identityKeys.getPrivate(), Jwts.SIG.PS256).compact();
 
-        verifyNoInteractions(filterChain);
-        assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+        assertRejected(runWithToken(rs512));
+        assertRejected(runWithToken(ps256));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_forUnsignedAlgNoneToken() {
+        String header = b64("{\"alg\":\"none\"}");
+        String payload = b64("{\"sub\":\"user_123\",\"type\":\"user\",\"roles\":[\"ADMIN\"],\"exp\":9999999999}");
+
+        assertRejected(runWithToken(header + "." + payload + "."));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_whenExpIsMissing() {
+        String token = Jwts.builder()
+                .subject("user_123")
+                .claim("type", "user")
+                .claim("roles", List.of("TENANT"))
+                .signWith(identityKeys.getPrivate(), Jwts.SIG.RS256)
+                .compact();
+
+        assertRejected(runWithToken(token));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_whenUserRolesMissingOrInvalid() {
+        String noRoles = Jwts.builder().subject("user_123").claim("type", "user")
+                .expiration(inOneMinute()).signWith(identityKeys.getPrivate(), Jwts.SIG.RS256).compact();
+        String stringRoles = Jwts.builder().subject("user_123").claim("type", "user").claim("roles", "ADMIN")
+                .expiration(inOneMinute()).signWith(identityKeys.getPrivate(), Jwts.SIG.RS256).compact();
+
+        assertRejected(runWithToken(noRoles));
+        assertRejected(runWithToken(stringRoles));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_whenTypeIsUnknownOrWrongCase() {
+        String admin = Jwts.builder().subject("user_123").claim("type", "admin").claim("roles", List.of("TENANT"))
+                .expiration(inOneMinute()).signWith(identityKeys.getPrivate(), Jwts.SIG.RS256).compact();
+        String upper = Jwts.builder().subject("user_123").claim("type", "USER").claim("roles", List.of("TENANT"))
+                .expiration(inOneMinute()).signWith(identityKeys.getPrivate(), Jwts.SIG.RS256).compact();
+
+        assertRejected(runWithToken(admin));
+        assertRejected(runWithToken(upper));
     }
 
     @Test
     void filter_authenticatesSuccessfully_forValidUserJwt() {
-        String validToken = Jwts.builder()
-                .subject("user_123")
-                .claim("type", "user")
-                .claim("roles", List.of("TENANT"))
-                .expiration(new Date(System.currentTimeMillis() + 60000))
-                .signWith(testKeyPair.getPrivate(), Jwts.SIG.RS256)
-                .compact();
+        String token = userToken().signWith(identityKeys.getPrivate(), Jwts.SIG.RS256).compact();
 
-        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/residents")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + validToken)
-                .build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        MockServerWebExchange exchange = runWithToken(token);
 
-        jwtAuthenticationFilter.filter(exchange, filterChain).block();
-
-        ArgumentCaptor<ServerWebExchange> captor = ArgumentCaptor.forClass(ServerWebExchange.class);
-        verify(filterChain).filter(captor.capture());
-
-        ServerWebExchange captured = captor.getValue();
+        ServerWebExchange captured = captureForwardedExchange();
         assertEquals("user_123", captured.getAttribute(JwtAuthenticationFilter.ATTR_USER_ID));
         assertEquals("user", captured.getAttribute(JwtAuthenticationFilter.ATTR_TOKEN_TYPE));
         assertEquals(List.of("TENANT"), captured.getAttribute(JwtAuthenticationFilter.ATTR_ROLES));
+        assertNull(exchange.getResponse().getStatusCode());
     }
 
     @Test
-    void filter_authenticatesSuccessfully_forValidServiceJwt() {
-        String validServiceToken = Jwts.builder()
-                .subject("resident-management-service")
-                .claim("type", "service")
-                .expiration(new Date(System.currentTimeMillis() + 60000))
-                .signWith(testKeyPair.getPrivate(), Jwts.SIG.RS256)
-                .compact();
+    void filter_authenticatesSuccessfully_forServiceJwtSignedWithRegisteredServiceKey() {
+        String token = serviceToken(RESIDENT_SERVICE).signWith(residentServiceKeys.getPrivate(), Jwts.SIG.RS256).compact();
 
+        runWithToken(token);
+
+        ServerWebExchange captured = captureForwardedExchange();
+        assertEquals(RESIDENT_SERVICE, captured.getAttribute(JwtAuthenticationFilter.ATTR_USER_ID));
+        assertEquals("service", captured.getAttribute(JwtAuthenticationFilter.ATTR_TOKEN_TYPE));
+        assertNull(captured.getAttribute(JwtAuthenticationFilter.ATTR_ROLES));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_forServiceJwtSignedWithIdentityKey() {
+        String token = serviceToken(RESIDENT_SERVICE).signWith(identityKeys.getPrivate(), Jwts.SIG.RS256).compact();
+
+        assertRejected(runWithToken(token));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_forUnregisteredService() {
+        KeyPair unknownKeys = TestKeyUtils.generateRsaKeyPair();
+        String token = serviceToken("unknown-service").signWith(unknownKeys.getPrivate(), Jwts.SIG.RS256).compact();
+
+        assertRejected(runWithToken(token));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_whenServiceImpersonatesAnotherRegisteredService() {
+        // Signed by an unregistered key but claiming to be resident-management-service
+        String token = serviceToken(RESIDENT_SERVICE)
+                .signWith(TestKeyUtils.generateRsaKeyPair().getPrivate(), Jwts.SIG.RS256).compact();
+
+        assertRejected(runWithToken(token));
+    }
+
+    @Test
+    void filter_returnsUnauthorized_forUserJwtSignedWithServiceKey() {
+        String token = userToken().signWith(residentServiceKeys.getPrivate(), Jwts.SIG.RS256).compact();
+
+        assertRejected(runWithToken(token));
+    }
+
+    private JwtBuilder userToken() {
+        return Jwts.builder()
+                .subject("user_123")
+                .claim("type", "user")
+                .claim("roles", List.of("TENANT"))
+                .issuedAt(new Date())
+                .expiration(inOneMinute());
+    }
+
+    private JwtBuilder serviceToken(String serviceName) {
+        return Jwts.builder()
+                .subject(serviceName)
+                .claim("type", "service")
+                .issuedAt(new Date())
+                .expiration(inOneMinute());
+    }
+
+    private static Date inOneMinute() {
+        return new Date(System.currentTimeMillis() + 60000);
+    }
+
+    private static String b64(String json) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private MockServerWebExchange runWithToken(String token) {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/residents")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + validServiceToken)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
-
         jwtAuthenticationFilter.filter(exchange, filterChain).block();
+        return exchange;
+    }
 
+    private void assertRejected(MockServerWebExchange exchange) {
+        verifyNoInteractions(filterChain);
+        assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+        assertTrue(exchange.getResponse().getBodyAsString().block().contains("\"code\":\"UNAUTHORIZED\""));
+    }
+
+    private ServerWebExchange captureForwardedExchange() {
         ArgumentCaptor<ServerWebExchange> captor = ArgumentCaptor.forClass(ServerWebExchange.class);
         verify(filterChain).filter(captor.capture());
-
-        ServerWebExchange captured = captor.getValue();
-        assertEquals("resident-management-service", captured.getAttribute(JwtAuthenticationFilter.ATTR_USER_ID));
-        assertEquals("service", captured.getAttribute(JwtAuthenticationFilter.ATTR_TOKEN_TYPE));
+        return captor.getValue();
     }
 }

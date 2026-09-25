@@ -1,15 +1,9 @@
 package com.projecta.apigateway.exception;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.projecta.apigateway.filter.RequestTraceFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
@@ -17,101 +11,100 @@ import org.springframework.web.server.WebExceptionHandler;
 import reactor.core.publisher.Mono;
 
 import java.net.ConnectException;
-import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
+import java.net.UnknownHostException;
+import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * Maps Gateway failures to the shared error envelope (08-ERROR-HANDLING-AND-RESILIENCY).
+ * Downstream unavailability and timeouts both map to 503 DEPENDENCY_UNAVAILABLE (08 §12-13, 11 §29).
+ * Exception messages are never returned to clients.
+ */
 @Component
 public class GlobalErrorWebExceptionHandler implements WebExceptionHandler, Ordered {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalErrorWebExceptionHandler.class);
 
-    private final ObjectMapper objectMapper;
+    private final ErrorResponseWriter errorResponseWriter;
 
-    public GlobalErrorWebExceptionHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    public GlobalErrorWebExceptionHandler(ErrorResponseWriter errorResponseWriter) {
+        this.errorResponseWriter = errorResponseWriter;
     }
 
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
-        ServerHttpResponse response = exchange.getResponse();
-
-        if (response.isCommitted()) {
+        if (exchange.getResponse().isCommitted()) {
             return Mono.error(ex);
         }
 
-        HttpStatus status;
-        String errorCode;
-        String message;
-
-        if (ex instanceof ResponseStatusException rse) {
-            status = HttpStatus.valueOf(rse.getStatusCode().value());
-            errorCode = mapStatusCodeToErrorCode(status);
-            message = rse.getReason() != null ? rse.getReason() : status.getReasonPhrase();
-        } else if (ex instanceof ConnectException) {
-            status = HttpStatus.SERVICE_UNAVAILABLE;
-            errorCode = "SERVICE_UNAVAILABLE";
-            message = "Unable to connect to downstream microservice";
-        } else if (ex instanceof TimeoutException || ex.getClass().getName().contains("Timeout")) {
-            status = HttpStatus.GATEWAY_TIMEOUT;
-            errorCode = "GATEWAY_TIMEOUT";
-            message = "Downstream service timed out";
+        ErrorMapping mapping = map(ex);
+        String path = exchange.getRequest().getURI().getPath();
+        if (mapping.status().is5xxServerError()) {
+            logger.error("Handling error [{} - {}] for path {}: {}", mapping.status().value(), mapping.code(), path, ex.toString());
         } else {
-            status = HttpStatus.INTERNAL_SERVER_ERROR;
-            errorCode = "INTERNAL_SERVER_ERROR";
-            message = "An unexpected error occurred processing your request";
+            logger.debug("Handling error [{} - {}] for path {}", mapping.status().value(), mapping.code(), path);
         }
 
-        logger.error("Handling error [{} - {}] for path {}: {}", status.value(), errorCode, exchange.getRequest().getURI().getPath(), ex.getMessage());
-
-        response.setStatusCode(status);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-
-        String requestId = exchange.getRequest().getHeaders().getFirst(RequestTraceFilter.REQUEST_ID_HEADER);
-        if (requestId == null) {
-            requestId = response.getHeaders().getFirst(RequestTraceFilter.REQUEST_ID_HEADER);
-        }
-
-        Map<String, Object> errorEnvelope = new HashMap<>();
-        errorEnvelope.put("success", false);
-        errorEnvelope.put("message", message);
-
-        Map<String, Object> errorDetails = new HashMap<>();
-        errorDetails.put("code", errorCode);
-        errorDetails.put("details", null);
-
-        errorEnvelope.put("error", errorDetails);
-        errorEnvelope.put("timestamp", Instant.now().toString());
-        errorEnvelope.put("requestId", requestId != null ? requestId : "");
-
-        try {
-            byte[] bytes = objectMapper.writeValueAsBytes(errorEnvelope);
-            DataBuffer buffer = response.bufferFactory().wrap(bytes);
-            return response.writeWith(Mono.just(buffer));
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to serialize exception response: {}", e.getMessage());
-            return response.setComplete();
-        }
+        return errorResponseWriter.write(exchange, mapping.status(), mapping.code(), mapping.message());
     }
 
-    private String mapStatusCodeToErrorCode(HttpStatus status) {
-        return switch (status) {
-            case BAD_REQUEST -> "BAD_REQUEST";
-            case UNAUTHORIZED -> "UNAUTHORIZED";
-            case FORBIDDEN -> "FORBIDDEN";
-            case NOT_FOUND -> "NOT_FOUND";
-            case CONFLICT -> "CONFLICT";
-            case TOO_MANY_REQUESTS -> "TOO_MANY_REQUESTS";
-            case SERVICE_UNAVAILABLE -> "SERVICE_UNAVAILABLE";
-            case GATEWAY_TIMEOUT -> "GATEWAY_TIMEOUT";
-            default -> "SERVER_ERROR";
-        };
+    private ErrorMapping map(Throwable ex) {
+        if (isDependencyFailure(ex)) {
+            return dependencyUnavailable();
+        }
+        if (ex instanceof ResponseStatusException rse) {
+            HttpStatus status = HttpStatus.resolve(rse.getStatusCode().value());
+            if (status == null) {
+                status = HttpStatus.INTERNAL_SERVER_ERROR;
+            }
+            return switch (status) {
+                case NOT_FOUND -> new ErrorMapping(status, "ROUTE_NOT_FOUND", "API endpoint not found");
+                // Gateway's own response-timeout and upstream availability errors
+                case GATEWAY_TIMEOUT, SERVICE_UNAVAILABLE, BAD_GATEWAY -> dependencyUnavailable();
+                case BAD_REQUEST -> new ErrorMapping(status, "BAD_REQUEST", "Invalid request");
+                case UNAUTHORIZED -> new ErrorMapping(status, "UNAUTHORIZED", "Authentication failed");
+                case FORBIDDEN -> new ErrorMapping(status, "PERMISSION_DENIED", "Access denied");
+                case METHOD_NOT_ALLOWED -> new ErrorMapping(status, "METHOD_NOT_ALLOWED", "Method not allowed");
+                case UNSUPPORTED_MEDIA_TYPE -> new ErrorMapping(status, "UNSUPPORTED_MEDIA_TYPE", "Unsupported media type");
+                case CONFLICT -> new ErrorMapping(status, "CONFLICT", "Conflict");
+                case TOO_MANY_REQUESTS -> new ErrorMapping(status, "TOO_MANY_REQUESTS", "Too many requests");
+                default -> status.is4xxClientError()
+                        ? new ErrorMapping(status, "BAD_REQUEST", status.getReasonPhrase())
+                        : internalError();
+            };
+        }
+        return internalError();
+    }
+
+    private boolean isDependencyFailure(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof ConnectException
+                    || t instanceof UnknownHostException
+                    || t instanceof TimeoutException
+                    || t instanceof ClosedChannelException
+                    || t.getClass().getSimpleName().contains("Timeout")
+                    || t.getClass().getSimpleName().equals("PrematureCloseException")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static ErrorMapping dependencyUnavailable() {
+        return new ErrorMapping(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE", "Service temporarily unavailable");
+    }
+
+    private static ErrorMapping internalError() {
+        return new ErrorMapping(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
+                "An unexpected error occurred processing your request");
     }
 
     @Override
     public int getOrder() {
-        // High priority exception handler in WebFlux filter chain
+        // Ahead of Spring Boot's DefaultErrorWebExceptionHandler (-1)
         return -2;
+    }
+
+    private record ErrorMapping(HttpStatus status, String code, String message) {
     }
 }
