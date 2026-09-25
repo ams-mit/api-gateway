@@ -22,8 +22,59 @@ spring:
               - OPTIONS
             allowed-headers: "*"
             allow-credentials: true
+      routes:
+        # --- Group 1: Identity & Access Service ---
+        - id: identity-access-auth-login
+          uri: ${projecta.services.identity-access}
+          predicates:
+            - Path=/api/v1/auth/login, /api/v1/auth/register
+            - Method=POST
 
-# Project A Microservice Target URLs
+        - id: identity-access-users
+          uri: ${projecta.services.identity-access}
+          predicates:
+            - Path=/api/v1/users/**, /api/v1/roles/**, /api/v1/auth/**
+
+        # --- Group 1: Resident Management Service ---
+        - id: resident-management-residents
+          uri: ${projecta.services.resident-management}
+          predicates:
+            - Path=/api/v1/residents/**, /api/v1/owners/**, /api/v1/tenants/**, /api/v1/staff/**
+
+        # --- Group 2: Property & Lease Services ---
+        - id: property-unit-service
+          uri: ${projecta.services.property-unit}
+          predicates:
+            - Path=/api/v1/properties/**, /api/v1/units/**
+
+        - id: lease-occupancy-service
+          uri: ${projecta.services.lease-occupancy}
+          predicates:
+            - Path=/api/v1/leases/**, /api/v1/occupancies/**
+
+        # --- Group 3: Billing & Utility Services ---
+        - id: billing-payment-service
+          uri: ${projecta.services.billing-payment}
+          predicates:
+            - Path=/api/v1/billing/**, /api/v1/payments/**
+
+        - id: utility-charge-service
+          uri: ${projecta.services.utility-charge}
+          predicates:
+            - Path=/api/v1/utilities/**
+
+        # --- Group 4: Operations & Community Services ---
+        - id: operations-service
+          uri: ${projecta.services.operations}
+          predicates:
+            - Path=/api/v1/operations/**, /api/v1/maintenance/**
+
+        - id: community-service
+          uri: ${projecta.services.community}
+          predicates:
+            - Path=/api/v1/community/**, /api/v1/announcements/**
+
+# Project A Microservice Target URLs & Security Settings
 projecta:
   services:
     identity-access: ${IDENTITY_ACCESS_SERVICE_URL:http://localhost:3001}
@@ -36,6 +87,10 @@ projecta:
     community: ${COMMUNITY_SERVICE_URL:http://localhost:3008}
 
   security:
+    public-paths:
+      - /api/v1/auth/login
+      - /api/v1/auth/register
+      - /actuator/**
     jwt:
       identity-public-key-path: ${IDENTITY_PUBLIC_KEY_PATH:classpath:keys/identity_public.pem}
       gateway-private-key-path: ${GATEWAY_PRIVATE_KEY_PATH:classpath:keys/gateway_private.pem}
