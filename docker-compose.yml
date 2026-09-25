@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: projecta-api-gateway
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-docker}
+      - SERVER_PORT=8080
+      - PROJECTA_SERVICES_IDENTITY_ACCESS=${IDENTITY_ACCESS_URL:-http://identity-access-service:8081}
+      - PROJECTA_SERVICES_RESIDENT_MANAGEMENT=${RESIDENT_MANAGEMENT_URL:-http://resident-management-service:8082}
+      - PROJECTA_SERVICES_PROPERTY_UNIT=${PROPERTY_UNIT_URL:-http://property-unit-service:8083}
+      - PROJECTA_SERVICES_LEASE_OCCUPANCY=${LEASE_OCCUPANCY_URL:-http://lease-occupancy-service:8084}
+      - PROJECTA_SERVICES_BILLING_PAYMENT=${BILLING_PAYMENT_URL:-http://billing-payment-service:8085}
+      - PROJECTA_SERVICES_UTILITY_CHARGE=${UTILITY_CHARGE_URL:-http://utility-charge-service:8086}
+      - PROJECTA_SERVICES_OPERATIONS=${OPERATIONS_URL:-http://operations-service:8087}
+      - PROJECTA_SERVICES_COMMUNITY=${COMMUNITY_URL:-http://community-service:8088}
+      - PROJECTA_SECURITY_IDENTITY_PUBLIC_KEY=${PROJECTA_SECURITY_IDENTITY_PUBLIC_KEY:-""}
+      - PROJECTA_SECURITY_GATEWAY_PRIVATE_KEY=${PROJECTA_SECURITY_GATEWAY_PRIVATE_KEY:-""}
+      - PROJECTA_SECURITY_GATEWAY_PUBLIC_KEY=${PROJECTA_SECURITY_GATEWAY_PUBLIC_KEY:-""}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - projecta-network
+
+networks:
+  projecta-network:
+    driver: bridge
