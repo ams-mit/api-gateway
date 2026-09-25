@@ -27,52 +27,101 @@ spring:
         - id: identity-access-auth-login
           uri: ${projecta.services.identity-access}
           predicates:
-            - Path=/api/v1/auth/login, /api/v1/auth/register
-            - Method=POST
+            - Path=/api/v1/auth/login
+
+        - id: identity-access-auth-register
+          uri: ${projecta.services.identity-access}
+          predicates:
+            - Path=/api/v1/auth/register
 
         - id: identity-access-users
           uri: ${projecta.services.identity-access}
           predicates:
-            - Path=/api/v1/users/**, /api/v1/roles/**, /api/v1/auth/**
+            - Path=/api/v1/users/**
+
+        - id: identity-access-roles
+          uri: ${projecta.services.identity-access}
+          predicates:
+            - Path=/api/v1/roles/**
 
         # --- Group 1: Resident Management Service ---
         - id: resident-management-residents
           uri: ${projecta.services.resident-management}
           predicates:
-            - Path=/api/v1/residents/**, /api/v1/owners/**, /api/v1/tenants/**, /api/v1/staff/**
+            - Path=/api/v1/residents/**
+
+        - id: resident-management-owners
+          uri: ${projecta.services.resident-management}
+          predicates:
+            - Path=/api/v1/owners/**
+
+        - id: resident-management-tenants
+          uri: ${projecta.services.resident-management}
+          predicates:
+            - Path=/api/v1/tenants/**
+
+        - id: resident-management-staff
+          uri: ${projecta.services.resident-management}
+          predicates:
+            - Path=/api/v1/staff/**
 
         # --- Group 2: Property & Lease Services ---
-        - id: property-unit-service
+        - id: property-unit-properties
           uri: ${projecta.services.property-unit}
           predicates:
-            - Path=/api/v1/properties/**, /api/v1/units/**
+            - Path=/api/v1/properties/**
 
-        - id: lease-occupancy-service
+        - id: property-unit-units
+          uri: ${projecta.services.property-unit}
+          predicates:
+            - Path=/api/v1/units/**
+
+        - id: lease-occupancy-leases
           uri: ${projecta.services.lease-occupancy}
           predicates:
-            - Path=/api/v1/leases/**, /api/v1/occupancies/**
+            - Path=/api/v1/leases/**
+
+        - id: lease-occupancy-occupancies
+          uri: ${projecta.services.lease-occupancy}
+          predicates:
+            - Path=/api/v1/occupancies/**
 
         # --- Group 3: Billing & Utility Services ---
-        - id: billing-payment-service
+        - id: billing-payment-billing
           uri: ${projecta.services.billing-payment}
           predicates:
-            - Path=/api/v1/billing/**, /api/v1/payments/**
+            - Path=/api/v1/billing/**
 
-        - id: utility-charge-service
+        - id: billing-payment-payments
+          uri: ${projecta.services.billing-payment}
+          predicates:
+            - Path=/api/v1/payments/**
+
+        - id: utility-charge-utilities
           uri: ${projecta.services.utility-charge}
           predicates:
             - Path=/api/v1/utilities/**
 
         # --- Group 4: Operations & Community Services ---
-        - id: operations-service
+        - id: operations-operations
           uri: ${projecta.services.operations}
           predicates:
-            - Path=/api/v1/operations/**, /api/v1/maintenance/**
+            - Path=/api/v1/operations/**
 
-        - id: community-service
+        - id: operations-maintenance
+          uri: ${projecta.services.operations}
+          predicates:
+            - Path=/api/v1/maintenance/**
+
+        - id: community-community
           uri: ${projecta.services.community}
           predicates:
-            - Path=/api/v1/community/**, /api/v1/announcements/**
+            - Path=/api/v1/community/**
+
+        - id: community-announcements
+          uri: ${projecta.services.community}
+          predicates:
+            - Path=/api/v1/announcements/**
 
 # Project A Microservice Target URLs & Security Settings
 projecta:
