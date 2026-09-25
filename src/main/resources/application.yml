@@ -5,6 +5,13 @@ spring:
   application:
     name: api-gateway
   cloud:
+    # No service discovery is used; hide its always-UNKNOWN health indicators
+    discovery:
+      client:
+        composite-indicator:
+          enabled: false
+        health-indicator:
+          enabled: false
     gateway:
       # Spring Cloud Gateway 5.x only reads the server.webflux prefix
       server:
@@ -149,14 +156,20 @@ projecta:
       - /api/v1/auth/register
     jwt:
       # Each key value may be a resource location (file:/..., classpath:...) or the PEM text itself.
-      identity-public-key: ${IDENTITY_JWT_PUBLIC_KEY:classpath:keys/identity_public.pem}
-      gateway-private-key: ${GATEWAY_JWT_PRIVATE_KEY:classpath:keys/gateway_private.pem}
+      # Defaults read the git-ignored ./keys folder (relative to the working directory)
+      identity-public-key: ${IDENTITY_JWT_PUBLIC_KEY:file:./keys/identity_public.pem}
+      gateway-private-key: ${GATEWAY_JWT_PRIVATE_KEY:file:./keys/gateway_private.pem}
       gateway-token-ttl: ${GATEWAY_JWT_EXPIRES_IN:5m}
       # Registered callers allowed to send Service JWTs. Blank entries are ignored,
       # so a service is only trusted once its public key is configured.
       service-public-keys:
         identity-access-service: ${IDENTITY_ACCESS_SERVICE_PUBLIC_KEY:}
-        resident-management-service: ${RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY:}
+        resident-management-service: ${RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY:file:./keys/resident_management_public.pem}
+
+  # Settings for the "services" component of /actuator/health
+  health:
+    path: /actuator/health
+    timeout: ${DOWNSTREAM_HEALTH_TIMEOUT:2s}
 
 management:
   endpoints:
@@ -165,7 +178,18 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: never
+      # Details are limited to the per-service UP/DOWN list; leaky built-in indicators are disabled below
+      show-components: always
+      show-details: always
+      # Downstream checks are cached so repeated health calls don't fan out to every service
+      cache:
+        time-to-live: ${HEALTH_CACHE_TTL:10s}
+      status:
+        # DEGRADED (a backend is down) ranks below UP, so the Gateway itself stays UP / HTTP 200
+        order: down, out-of-service, up, degraded, unknown
+  health:
+    diskspace:
+      enabled: false
 
 logging:
   level:

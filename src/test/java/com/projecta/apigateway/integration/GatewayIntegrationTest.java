@@ -201,13 +201,18 @@ class GatewayIntegrationTest {
     }
 
     @Test
-    void health_isPublic_andHidesDetails() {
+    void health_listsEachServiceStatus_andStaysUpWhenABackendIsDown() {
         client.get().uri("/actuator/health")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.status").isEqualTo("UP")
-                .jsonPath("$.components").doesNotExist();
+                .jsonPath("$.components.services.status").isEqualTo("DEGRADED")
+                .jsonPath("$.components.services.details['identity-access-service']").isEqualTo("UP")
+                .jsonPath("$.components.services.details['resident-management-service']").isEqualTo("UP")
+                .jsonPath("$.components.services.details['property-unit-service']").isEqualTo("DOWN")
+                .jsonPath("$.components.diskSpace").doesNotExist()
+                .jsonPath("$.components.discoveryComposite").doesNotExist();
     }
 
     private static String validUserJwt() {
@@ -226,8 +231,10 @@ class GatewayIntegrationTest {
             HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
             server.setExecutor(Executors.newCachedThreadPool());
             server.createContext("/", exchange -> {
-                LAST_BACKEND_HEADERS.set(exchange.getRequestHeaders());
-                LAST_BACKEND_PATH.set(exchange.getRequestURI().getPath());
+                if (!exchange.getRequestURI().getPath().equals("/actuator/health")) {
+                    LAST_BACKEND_HEADERS.set(exchange.getRequestHeaders());
+                    LAST_BACKEND_PATH.set(exchange.getRequestURI().getPath());
+                }
                 if (exchange.getRequestURI().getPath().endsWith("/slow")) {
                     sleep(3000);
                 }

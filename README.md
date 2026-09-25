@@ -16,7 +16,7 @@ The **API Gateway** serves as the single unified entry point for all client appl
 - **Gateway Token Re-Signing**: Strips external client tokens and re-signs downstream requests with Gateway Private Key (RS256) to ensure downstream microservices only trust Gateway-issued context. Caller-supplied `Authorization` headers are removed on public routes.
 - **Request Tracing & Correlation**: Generates or propagates `X-Request-ID` on every request, including unknown routes and error responses.
 - **Centralized Error Envelopes**: `401 UNAUTHORIZED`, `404 ROUTE_NOT_FOUND`, `503 DEPENDENCY_UNAVAILABLE` (backend unreachable or timed out), `500 INTERNAL_SERVER_ERROR`; exception details are never returned to clients.
-- **Health Monitoring**: `/actuator/health` (status only, no details) for Docker healthchecks.
+- **Health Monitoring**: `/actuator/health` reports the Gateway's own status plus a `services` component listing every downstream service as `UP`/`DOWN` (checked via each service's `/actuator/health`, 2 s timeout, results cached 10 s). A down backend marks `services` as `DEGRADED` but the Gateway stays `UP` (HTTP 200), so Docker does not restart it.
 - **Container Readiness**: Multi-stage `Dockerfile` and `docker-compose.yml` configuration for seamless container orchestration.
 
 ---
