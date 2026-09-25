@@ -35,7 +35,7 @@ public class GatewayJwtSigner {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + TOKEN_TTL_MS);
 
-        var builder = Jwts.builder()
+        io.jsonwebtoken.JwtBuilder builder = Jwts.builder()
                 .header().add("typ", "JWT").and()
                 .subject(subject)
                 .claim("type", "user")
