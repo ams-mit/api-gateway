@@ -1,3 +1,6 @@
+# Standalone Gateway container. In the integrated Project A compose, add the eight backend
+# services to the same network and point the *_SERVICE_URI values at their service names.
+# Every variable below is required (see .env.example); compose stops early if one is missing.
 services:
   api-gateway:
     build:
@@ -8,24 +11,33 @@ services:
       - "${SERVER_PORT:-8080}:8080"
     environment:
       SERVER_PORT: "8080"
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      # Downstream service URLs (names match application.yml placeholders)
-      IDENTITY_ACCESS_SERVICE_URL: ${IDENTITY_ACCESS_SERVICE_URL:-http://identity-access-service:3001}
-      RESIDENT_MANAGEMENT_SERVICE_URL: ${RESIDENT_MANAGEMENT_SERVICE_URL:-http://resident-management-service:3002}
-      PROPERTY_UNIT_SERVICE_URL: ${PROPERTY_UNIT_SERVICE_URL:-http://property-unit-service:3003}
-      LEASE_OCCUPANCY_SERVICE_URL: ${LEASE_OCCUPANCY_SERVICE_URL:-http://lease-occupancy-service:3004}
-      BILLING_PAYMENT_SERVICE_URL: ${BILLING_PAYMENT_SERVICE_URL:-http://billing-payment-service:3005}
-      UTILITY_CHARGE_SERVICE_URL: ${UTILITY_CHARGE_SERVICE_URL:-http://utility-charge-service:3006}
-      OPERATIONS_SERVICE_URL: ${OPERATIONS_SERVICE_URL:-http://operations-service:3007}
-      COMMUNITY_SERVICE_URL: ${COMMUNITY_SERVICE_URL:-http://community-service:3008}
-      # RSA keys: a location (file:/app/keys/...) or inline PEM. Defaults read the mounted ./keys directory.
-      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:-file:/app/keys/identity_public.pem}
-      GATEWAY_JWT_PRIVATE_KEY: ${GATEWAY_JWT_PRIVATE_KEY:-file:/app/keys/gateway_private.pem}
+      IDENTITY_SERVICE_URI: ${IDENTITY_SERVICE_URI:?set in .env}
+      RESIDENT_SERVICE_URI: ${RESIDENT_SERVICE_URI:?set in .env}
+      PROPERTY_SERVICE_URI: ${PROPERTY_SERVICE_URI:?set in .env}
+      LEASE_SERVICE_URI: ${LEASE_SERVICE_URI:?set in .env}
+      BILLING_SERVICE_URI: ${BILLING_SERVICE_URI:?set in .env}
+      UTILITY_SERVICE_URI: ${UTILITY_SERVICE_URI:?set in .env}
+      OPERATIONS_SERVICE_URI: ${OPERATIONS_SERVICE_URI:?set in .env}
+      COMMUNITY_SERVICE_URI: ${COMMUNITY_SERVICE_URI:?set in .env}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:?set in .env}
+      GATEWAY_CONNECT_TIMEOUT_MS: ${GATEWAY_CONNECT_TIMEOUT_MS:-2000}
+      GATEWAY_READ_TIMEOUT_MS: ${GATEWAY_READ_TIMEOUT_MS:-5000}
+      IDENTITY_PUBLIC_KEY: ${IDENTITY_PUBLIC_KEY:?set in .env}
+      GATEWAY_PRIVATE_KEY: ${GATEWAY_PRIVATE_KEY:?set in .env}
+      GATEWAY_PUBLIC_KEY: ${GATEWAY_PUBLIC_KEY:-}
       GATEWAY_JWT_EXPIRES_IN: ${GATEWAY_JWT_EXPIRES_IN:-5m}
-      IDENTITY_ACCESS_SERVICE_PUBLIC_KEY: ${IDENTITY_ACCESS_SERVICE_PUBLIC_KEY:-}
-      RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY: ${RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY:-file:/app/keys/resident_management_public.pem}
+      IDENTITY_SERVICE_PUBLIC_KEY: ${IDENTITY_SERVICE_PUBLIC_KEY:?set in .env}
+      RESIDENT_SERVICE_PUBLIC_KEY: ${RESIDENT_SERVICE_PUBLIC_KEY:?set in .env}
+      PROPERTY_SERVICE_PUBLIC_KEY: ${PROPERTY_SERVICE_PUBLIC_KEY:?set in .env}
+      LEASE_SERVICE_PUBLIC_KEY: ${LEASE_SERVICE_PUBLIC_KEY:?set in .env}
+      BILLING_SERVICE_PUBLIC_KEY: ${BILLING_SERVICE_PUBLIC_KEY:?set in .env}
+      UTILITY_SERVICE_PUBLIC_KEY: ${UTILITY_SERVICE_PUBLIC_KEY:?set in .env}
+      OPERATIONS_SERVICE_PUBLIC_KEY: ${OPERATIONS_SERVICE_PUBLIC_KEY:?set in .env}
+      COMMUNITY_SERVICE_PUBLIC_KEY: ${COMMUNITY_SERVICE_PUBLIC_KEY:?set in .env}
+      DOWNSTREAM_HEALTH_TIMEOUT: ${DOWNSTREAM_HEALTH_TIMEOUT:-2s}
+      HEALTH_CACHE_TTL: ${HEALTH_CACHE_TTL:-10s}
     volumes:
+      # Git-ignored key folder; mounted read-only, never baked into the image
       - ./keys:/app/keys:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]

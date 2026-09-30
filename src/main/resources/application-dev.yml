@@ -1,3 +1,31 @@
+# Local development defaults. Activate with the "dev" profile, e.g.
+#   .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
+# Keys are read from the git-ignored ./keys folder (see README "Keys").
+# Environment variables still override every value here.
+IDENTITY_SERVICE_URI: http://localhost:3001
+RESIDENT_SERVICE_URI: http://localhost:3002
+PROPERTY_SERVICE_URI: http://localhost:3003
+LEASE_SERVICE_URI: http://localhost:3004
+BILLING_SERVICE_URI: http://localhost:3005
+UTILITY_SERVICE_URI: http://localhost:3006
+OPERATIONS_SERVICE_URI: http://localhost:3007
+COMMUNITY_SERVICE_URI: http://localhost:3008
+
+FRONTEND_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+
+IDENTITY_PUBLIC_KEY: file:./keys/identity_public.pem
+GATEWAY_PRIVATE_KEY: file:./keys/gateway_private.pem
+GATEWAY_PUBLIC_KEY: file:./keys/gateway_public.pem
+
+IDENTITY_SERVICE_PUBLIC_KEY: file:./keys/services/identity-access-service_public.pem
+RESIDENT_SERVICE_PUBLIC_KEY: file:./keys/services/resident-management-service_public.pem
+PROPERTY_SERVICE_PUBLIC_KEY: file:./keys/services/property-unit-service_public.pem
+LEASE_SERVICE_PUBLIC_KEY: file:./keys/services/lease-occupancy-service_public.pem
+BILLING_SERVICE_PUBLIC_KEY: file:./keys/services/billing-payment-service_public.pem
+UTILITY_SERVICE_PUBLIC_KEY: file:./keys/services/utility-charge-service_public.pem
+OPERATIONS_SERVICE_PUBLIC_KEY: file:./keys/services/operations-service_public.pem
+COMMUNITY_SERVICE_PUBLIC_KEY: file:./keys/services/community-service_public.pem
+
 logging:
   level:
-    com.projecta.apigateway: DEBUG
+    kln.ams.apigateway: DEBUG
