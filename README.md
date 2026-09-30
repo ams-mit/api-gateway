@@ -118,7 +118,14 @@ docker run -d -p 8080:8080 --name api-gateway projecta/api-gateway:latest
 ### Routes
 Routes are defined in `application.yml` under `spring.cloud.gateway.server.webflux.routes` (the prefix required by Spring Cloud Gateway 5).
 - Group 1: `/api/v1/auth/**`, `/api/v1/profile/**`, `/api/v1/admin/users/**`, `/api/v1/admin/roles/**` → identity-access; `/api/v1/residents|owners|tenants|staff/**` → resident-management.
-- Groups 2–4: placeholder routes pending those teams' API contracts.
+- Group 2: `/api/v1/buildings/**`, `/unit-types/**`, `/ownerships/**`, `/properties/**`, `/units/**`, `/internal/units/**` → property-unit (port 8082); `/leases/**`, `/occupancies/**`, `/internal/occupancies/**`, and `/units/{unitId}/active-occupancy` → lease-occupancy (port 8084). The active-occupancy path precedes the general unit route.
+- Group 1 internal user validation: `/api/v1/internal/users/**` → identity-access; confirm the endpoint with Group 1.
+- Groups 3–4: placeholder routes pending those teams' API contracts.
+
+The Gateway requires the property and lease services' public keys to verify their outbound
+Service JWTs. Each Group 2 service needs the Gateway public key to verify forwarded JWTs.
+The example Compose file targets the separately hosted Group 2 services through
+`host.docker.internal` on ports 8082 and 8084; override their URLs if deployed elsewhere.
 
 ### Standard Response Envelope (Error Example)
 ```json

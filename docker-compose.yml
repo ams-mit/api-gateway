@@ -13,8 +13,8 @@ services:
       # Downstream service URLs (names match application.yml placeholders)
       IDENTITY_ACCESS_SERVICE_URL: ${IDENTITY_ACCESS_SERVICE_URL:-http://identity-access-service:3001}
       RESIDENT_MANAGEMENT_SERVICE_URL: ${RESIDENT_MANAGEMENT_SERVICE_URL:-http://resident-management-service:3002}
-      PROPERTY_UNIT_SERVICE_URL: ${PROPERTY_UNIT_SERVICE_URL:-http://property-unit-service:3003}
-      LEASE_OCCUPANCY_SERVICE_URL: ${LEASE_OCCUPANCY_SERVICE_URL:-http://lease-occupancy-service:3004}
+      PROPERTY_UNIT_SERVICE_URL: ${PROPERTY_UNIT_SERVICE_URL:-http://host.docker.internal:8082}
+      LEASE_OCCUPANCY_SERVICE_URL: ${LEASE_OCCUPANCY_SERVICE_URL:-http://host.docker.internal:8084}
       BILLING_PAYMENT_SERVICE_URL: ${BILLING_PAYMENT_SERVICE_URL:-http://billing-payment-service:3005}
       UTILITY_CHARGE_SERVICE_URL: ${UTILITY_CHARGE_SERVICE_URL:-http://utility-charge-service:3006}
       OPERATIONS_SERVICE_URL: ${OPERATIONS_SERVICE_URL:-http://operations-service:3007}
@@ -25,6 +25,8 @@ services:
       GATEWAY_JWT_EXPIRES_IN: ${GATEWAY_JWT_EXPIRES_IN:-5m}
       IDENTITY_ACCESS_SERVICE_PUBLIC_KEY: ${IDENTITY_ACCESS_SERVICE_PUBLIC_KEY:-}
       RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY: ${RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY:-file:/app/keys/resident_management_public.pem}
+      PROPERTY_UNIT_SERVICE_PUBLIC_KEY: ${PROPERTY_UNIT_SERVICE_PUBLIC_KEY:-}
+      LEASE_OCCUPANCY_SERVICE_PUBLIC_KEY: ${LEASE_OCCUPANCY_SERVICE_PUBLIC_KEY:-}
     volumes:
       - ./keys:/app/keys:ro
     healthcheck:

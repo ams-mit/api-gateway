@@ -53,6 +53,7 @@ class GatewayIntegrationTest {
         registry.add("projecta.services.identity-access", () -> backendUrl);
         registry.add("projecta.services.resident-management", () -> backendUrl);
         registry.add("projecta.services.property-unit", () -> "http://localhost:" + unusedPort());
+        registry.add("projecta.services.lease-occupancy", () -> backendUrl);
         registry.add("spring.cloud.gateway.server.webflux.httpclient.response-timeout", () -> "1s");
     }
 
@@ -181,13 +182,34 @@ class GatewayIntegrationTest {
 
     @Test
     void unreachableBackend_returns503DependencyUnavailable() {
-        client.post().uri("/api/v1/properties")
+        client.post().uri("/api/v1/buildings")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + validUserJwt())
                 .exchange()
                 .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
                 .expectBody()
                 .jsonPath("$.error.code").isEqualTo("DEPENDENCY_UNAVAILABLE")
                 .jsonPath("$.requestId").isNotEmpty();
+    }
+
+    @Test
+    void group2RoutesReachTheIntendedService() {
+        client.get().uri("/api/v1/units/11111111-1111-1111-1111-111111111111/active-occupancy")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + validUserJwt())
+                .exchange()
+                .expectStatus().isOk();
+        assertEquals("/api/v1/units/11111111-1111-1111-1111-111111111111/active-occupancy",
+                LAST_BACKEND_PATH.get());
+
+        client.get().uri("/api/v1/internal/occupancies/validate")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + validUserJwt())
+                .exchange()
+                .expectStatus().isOk();
+        assertEquals("/api/v1/internal/occupancies/validate", LAST_BACKEND_PATH.get());
+
+        client.get().uri("/api/v1/buildings")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + validUserJwt())
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @Test

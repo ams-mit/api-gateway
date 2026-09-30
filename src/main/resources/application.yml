@@ -54,6 +54,17 @@ spring:
               predicates:
                 - Path=/api/v1/admin/roles/**
 
+            # Precedes identity-access internal users route so user occupancy reaches lease-occupancy-service (LEASE-INT-003)
+            - id: lease-occupancy-internal-user-occupancy
+              uri: ${projecta.services.lease-occupancy}
+              predicates:
+                - Path=/api/v1/internal/users/{userId}/occupancy
+
+            - id: identity-access-internal-users
+              uri: ${projecta.services.identity-access}
+              predicates:
+                - Path=/api/v1/internal/users/**
+
             # --- Group 1: Resident Management Service ---
             - id: resident-management-residents
               uri: ${projecta.services.resident-management}
@@ -80,10 +91,43 @@ spring:
             # confirmed method/path entries when each team publishes its contract.
 
             # --- Group 2: Property & Lease Services ---
-            - id: property-unit-properties
+            - id: property-unit-buildings
               uri: ${projecta.services.property-unit}
               predicates:
-                - Path=/api/v1/properties/**
+                - Path=/api/v1/buildings/**
+
+            - id: property-unit-unit-types
+              uri: ${projecta.services.property-unit}
+              predicates:
+                - Path=/api/v1/unit-types/**
+
+            - id: property-unit-ownerships
+              uri: ${projecta.services.property-unit}
+              predicates:
+                - Path=/api/v1/ownerships/**
+
+            # Precede property-unit internal units route so unit occupancy and occupants reach lease-occupancy-service (LEASE-INT-001, LEASE-INT-002)
+            - id: lease-occupancy-internal-unit-occupancy
+              uri: ${projecta.services.lease-occupancy}
+              predicates:
+                - Path=/api/v1/internal/units/{unitId}/occupancy
+
+            - id: lease-occupancy-internal-unit-occupants
+              uri: ${projecta.services.lease-occupancy}
+              predicates:
+                - Path=/api/v1/internal/units/{unitId}/occupants
+
+            - id: property-unit-internal-units
+              uri: ${projecta.services.property-unit}
+              predicates:
+                - Path=/api/v1/internal/units/**
+
+            # This lease-owned path must take precedence over the general units route.
+            - id: lease-occupancy-unit-active-occupancy
+              uri: ${projecta.services.lease-occupancy}
+              predicates:
+                - Path=/api/v1/units/{unitId}/active-occupancy
+
 
             - id: property-unit-units
               uri: ${projecta.services.property-unit}
@@ -99,6 +143,11 @@ spring:
               uri: ${projecta.services.lease-occupancy}
               predicates:
                 - Path=/api/v1/occupancies/**
+
+            - id: lease-occupancy-internal-occupancies
+              uri: ${projecta.services.lease-occupancy}
+              predicates:
+                - Path=/api/v1/internal/occupancies/**
 
             # --- Group 3: Billing & Utility Services ---
             - id: billing-payment-billing
@@ -142,8 +191,8 @@ projecta:
   services:
     identity-access: ${IDENTITY_ACCESS_SERVICE_URL:http://localhost:3001}
     resident-management: ${RESIDENT_MANAGEMENT_SERVICE_URL:http://localhost:3002}
-    property-unit: ${PROPERTY_UNIT_SERVICE_URL:http://localhost:3003}
-    lease-occupancy: ${LEASE_OCCUPANCY_SERVICE_URL:http://localhost:3004}
+    property-unit: ${PROPERTY_UNIT_SERVICE_URL:http://localhost:8082}
+    lease-occupancy: ${LEASE_OCCUPANCY_SERVICE_URL:http://localhost:8084}
     billing-payment: ${BILLING_PAYMENT_SERVICE_URL:http://localhost:3005}
     utility-charge: ${UTILITY_CHARGE_SERVICE_URL:http://localhost:3006}
     operations: ${OPERATIONS_SERVICE_URL:http://localhost:3007}
@@ -165,6 +214,8 @@ projecta:
       service-public-keys:
         identity-access-service: ${IDENTITY_ACCESS_SERVICE_PUBLIC_KEY:}
         resident-management-service: ${RESIDENT_MANAGEMENT_SERVICE_PUBLIC_KEY:file:./keys/resident_management_public.pem}
+        property-unit-service: ${PROPERTY_UNIT_SERVICE_PUBLIC_KEY:}
+        lease-occupancy-service: ${LEASE_OCCUPANCY_SERVICE_PUBLIC_KEY:}
 
   # Settings for the "services" component of /actuator/health
   health:
