@@ -8,13 +8,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Fails startup on invalid non-key configuration (API-GATEWAY.md §121-§122, §153-§154).
+ * Fails startup on invalid non-key configuration.
  * Key material is validated by {@link kln.ams.apigateway.security.JwtKeyStore}.
  */
 @Component
 public class GatewayConfigurationValidator {
 
-    /** The eight Project A backend services the Gateway must route (API-GATEWAY.md §18). */
+    /** The eight Project A backend services the Gateway must route. */
     public static final Set<String> REQUIRED_SERVICES = Set.of(
             "identity-access-service", "resident-management-service",
             "property-unit-service", "lease-occupancy-service",

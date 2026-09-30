@@ -1,28 +1,30 @@
 # Gateway Route Registry
 
-Source of truth: `src/main/resources/application.yml` (`spring.cloud.gateway.server.webflux.routes`).
-This table mirrors it; the Gateway's `/v3/api-docs` is generated from the live configuration.
+The routes are configured in `src/main/resources/application.yml`
+(`spring.cloud.gateway.server.webflux.routes`). This page mirrors that configuration. The Gateway's own
+OpenAPI document (`/v3/api-docs`) is generated from the live configuration, so it always matches.
 
-Contracts: `API-GATEWAY.md` §19, §55–§62 (routes) and `PROJECT-A-CROSS-SERVICE-API-REGISTRY.md`
-(internal APIs and allowed callers). Paths are forwarded unchanged; the only rewrite is the
-documentation route (`/api-docs/<service>` → `<service>/v3/api-docs`).
+Routes follow the Project A API contracts: public/user routes come from each service's API contract, and
+internal routes with their allowed callers come from the Project A cross-service API registry. Request
+paths are forwarded unchanged. The only rewrite is the documentation route
+(`/api-docs/<service>` → `<service>/v3/api-docs`).
 
-**Access types**
+## Access types
 
-| Access | Token | Enforced by the Gateway |
+| Access | Token | What the Gateway enforces |
 |---|---|---|
-| public | none | caller's `Authorization` header is removed before forwarding |
-| user | User JWT | RS256, Identity Access key, `type=user`, UUID `sub`, canonical `roles`, `iat`, `exp`; service tokens get 403 |
-| service | Service JWT | RS256, registered key of the claimed service, `type=service`, `iat`, `exp`, caller on the allow-list; user tokens get 403 |
-| blocked | — | retired path, answered with 404 `ROUTE_NOT_FOUND` |
+| public | none | The caller's `Authorization` header is removed before forwarding |
+| user | User JWT | RS256, Identity Access key, `type=user`, UUID `sub`, canonical `roles`, `iat`, `exp`. Service tokens get 403 |
+| service | Service JWT | RS256, registered key of the claimed service, `type=service`, `iat`, `exp`, caller on the allow-list. User tokens get 403 |
+| blocked | — | Retired path; answered with 404 `ROUTE_NOT_FOUND` |
 
-A route without `access` metadata is treated as `user` (never public by omission). Any path under
-`/api/v1/internal/` is always service-only.
+A route without an `access` value is treated as `user`, so no route becomes public by accident. Any path
+under `/api/v1/internal/` is always service-only, whatever its metadata says.
 
 ## Internal routes (Service JWT + allow-list)
 
-Evaluated first (`order: -20`). There is no catch-all `/api/v1/internal/**` route: an internal path
-that is not listed here returns 404.
+These are evaluated first (`order: -20`). There is no catch-all `/api/v1/internal/**` route, so an
+internal path that isn't listed here returns 404.
 
 | Route ID | Method | Path | Provider | API ID | Allowed callers |
 |---|---|---|---|---|---|
@@ -40,8 +42,8 @@ that is not listed here returns 404.
 | community-internal-notification-status | GET | `/api/v1/internal/notifications/{notificationId}/status` | community-service | COMM-INT-002 | resident-management, billing-payment, operations |
 | community-internal-resident-notifications | POST | `/api/v1/internal/notifications/resident` | community-service | COMM-INT-003 | operations, billing-payment, lease-occupancy |
 
-(Caller names omit the `-service` suffix above for width; configuration uses the full names.)
-`identity-access-service` is registered (its key is required) but is not a consumer of any internal API.
+The caller names above omit the `-service` suffix to keep the table narrow; the configuration uses the
+full names. `identity-access-service` has a registered key but doesn't call any internal API.
 
 ## User and public routes
 
@@ -61,7 +63,7 @@ that is not listed here returns 404.
 | property-units | GET, POST | `/api/v1/units/**` | property-unit-service | user |
 | property-ownerships | GET, POST | `/api/v1/ownerships` | property-unit-service | user |
 | lease-active-occupancy (order −10) | GET | `/api/v1/units/{unitId}/active-occupancy` | lease-occupancy-service | user |
-| lease-legacy-validate-blocked (order −10) | any | `/api/v1/leases/validate` | — | blocked (§58) |
+| lease-legacy-validate-blocked (order −10) | any | `/api/v1/leases/validate` | — | blocked |
 | lease-leases | GET, POST, PATCH | `/api/v1/leases/**` | lease-occupancy-service | user |
 | lease-occupancies | GET, POST, PATCH | `/api/v1/occupancies/**` | lease-occupancy-service | user |
 | billing-charge-rules | GET, POST, PUT, PATCH | `/api/v1/charge-rules/**` | billing-payment-service | user |
@@ -83,33 +85,40 @@ that is not listed here returns 404.
 | community-notifications | all | `/api/v1/notifications/**` | community-service | user |
 | docs-&lt;service&gt; | GET | `/api-docs/<service>` → `/v3/api-docs` | each service | public |
 
-Methods come from the method lists in `API-GATEWAY.md` §55–§60. Group 4 routes allow
-GET/POST/PUT/PATCH/DELETE because `API-GATEWAY.md` §61–§62 gives prefixes only; narrow them when the
-Operations and Community contracts are available. A method not listed returns 404 `ROUTE_NOT_FOUND`.
+**Route ordering.** `/api/v1/units/{unitId}/active-occupancy` belongs to lease-occupancy-service but also
+matches property-unit-service's `/api/v1/units/**`, so it has a lower `order` and is matched first.
+`/api/v1/leases/validate` is a retired endpoint (validation moved to the internal APIs); it is blocked
+explicitly because `/api/v1/leases/**` would otherwise forward it with `leaseId=validate`.
+
+**Methods.** A method that isn't listed for a path returns 404 `ROUTE_NOT_FOUND`. The Operations and
+Community routes allow GET/POST/PUT/PATCH/DELETE because only their path prefixes are defined so far;
+narrow them when those services publish their endpoint lists.
 
 ## Removed routes
 
-The previous configuration contained routes that no contract defines. They were removed (§99) and now
-return 404: `/api/v1/auth/register`, `/api/v1/properties/**`, `/api/v1/billing/**`, `/api/v1/utilities/**`,
+The previous configuration contained routes that no contract defines. They were removed and now return
+404: `/api/v1/auth/register`, `/api/v1/properties/**`, `/api/v1/billing/**`, `/api/v1/utilities/**`,
 `/api/v1/maintenance/**`, `/api/v1/operations/**`, `/api/v1/community/**`, `/api/v1/internal/leases/**`,
 `/api/v1/internal/occupancies/**`, `/api/v1/internal/invoices/**`, `/api/v1/internal/balance/**`, and the
 Operations `/api/v1/internal/{maintenance-requests,work-orders,facilities,bookings}/**` routes.
 
 ## Open contract questions
 
-These are inconsistencies between the shared documents. The Gateway follows the cross-service registry
-(which `API-GATEWAY.md` §19, §24 and §59 defer to); each needs confirmation by the provider team.
+The shared Project A documents disagree on the points below. Where they conflict, the Gateway follows the
+cross-service API registry. Each point needs confirmation from the teams involved.
 
-1. **Billing unit balance path.** Registry BILL-INT-001: `GET /api/v1/internal/units/{unitId}/balance`.
-   `API-GATEWAY.md` §59: `GET /api/v1/internal/balance/{unitId}`. The Gateway routes the registry path only.
-2. **Internal allow-list.** `API-GATEWAY.md` §24 lists a conceptual caller matrix that differs from the
-   registry's per-API consumer lists (e.g. it omits property-unit-service as a caller, and lease/billing/
-   resident → community notifications). The Gateway uses the registry consumer lists.
-3. **Utility-charge dependencies.** The registry dependency matrix says utility-charge-service may call
-   property-unit and lease-occupancy "where required", but those providers' consumer lists do not include
-   utility-charge-service, so the Gateway denies those calls (403) until the registry is updated.
-4. **Environment variable names.** The JWT standard uses `IDENTITY_JWT_PUBLIC_KEY` / `GATEWAY_JWT_PRIVATE_KEY`;
-   `API-GATEWAY.md` §27/§83 uses `IDENTITY_PUBLIC_KEY` / `GATEWAY_PRIVATE_KEY` / `*_SERVICE_URI`. The Gateway
-   uses the `API-GATEWAY.md` names, plus `GATEWAY_JWT_EXPIRES_IN` from the JWT standard.
-5. **Role rules.** `API-GATEWAY.md` §129 expects route-level role checks, but no document assigns roles to
-   routes. The Gateway validates that roles are canonical and leaves role authorization to the backends.
+1. **Billing unit balance path.** The registry defines BILL-INT-001 as
+   `GET /api/v1/internal/units/{unitId}/balance`; the Gateway specification lists
+   `GET /api/v1/internal/balance/{unitId}`. Only the registry path is routed.
+2. **Internal allow-list.** The Gateway specification's example caller matrix differs from the registry's
+   per-API consumer lists. For example, it leaves out property-unit-service as a caller, and
+   lease/billing/resident → community notifications. The Gateway uses the registry's consumer lists.
+3. **Utility-charge dependencies.** The registry's dependency matrix says utility-charge-service may call
+   property-unit and lease-occupancy "where required", but those APIs' consumer lists don't include
+   utility-charge-service. Those calls are denied (403) until the registry is updated.
+4. **Environment variable names.** The JWT standard names the keys `IDENTITY_JWT_PUBLIC_KEY` /
+   `GATEWAY_JWT_PRIVATE_KEY`; the Gateway specification uses `IDENTITY_PUBLIC_KEY` / `GATEWAY_PRIVATE_KEY`
+   and `*_SERVICE_URI`. The Gateway uses the Gateway specification's names, plus `GATEWAY_JWT_EXPIRES_IN`
+   from the JWT standard.
+5. **Role rules.** Route-level role checks are expected, but no document says which roles may use which
+   route. The Gateway checks that roles are canonical and leaves role authorization to the backends.

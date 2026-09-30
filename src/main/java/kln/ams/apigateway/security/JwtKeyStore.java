@@ -19,8 +19,7 @@ import java.util.function.Supplier;
 
 /**
  * Holds the Gateway's trust material. Everything is loaded and validated at startup so a
- * misconfigured deployment fails fast instead of starting in an insecure or broken state
- * (API-GATEWAY.md §121, §153):
+ * misconfigured deployment fails fast instead of starting in an insecure or broken state:
  * <ul>
  *   <li>Identity Access public key and Gateway private key are required;</li>
  *   <li>every backend service in {@code projecta.services} must have a registered public key;</li>

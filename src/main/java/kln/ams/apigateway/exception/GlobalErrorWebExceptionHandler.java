@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Maps Gateway failures to the shared error envelope (API-GATEWAY.md §34-§36, §115-§118).
+ * Maps Gateway failures to the shared error envelope.
  * <ul>
  *   <li>Unknown route: 404 {@code ROUTE_NOT_FOUND}.</li>
  *   <li>Backend unreachable or timed out: 503 {@code DEPENDENCY_UNAVAILABLE}, with the logical

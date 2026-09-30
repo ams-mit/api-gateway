@@ -35,7 +35,7 @@ public class DownstreamServicesProperties {
     }
 
     public static class Health {
-        /** Health path exposed by every service (04-API-STANDARD §30). */
+        /** Health path exposed by every service. */
         private String path = "/actuator/health";
         /** Upper bound for a single service health check. */
         private Duration timeout = Duration.ofSeconds(2);

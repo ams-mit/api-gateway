@@ -36,8 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Boots the real Gateway (route configuration, filters, error handling) against one stub backend per
- * Project A service, and verifies the canonical route registry of API-GATEWAY.md §55-§62 and the
- * internal allow-list of PROJECT-A-CROSS-SERVICE-API-REGISTRY.md.
+ * Project A service, and verifies every contract route and every internal allow-list.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GatewayIntegrationTest {
@@ -79,7 +78,7 @@ class GatewayIntegrationTest {
 
     @ParameterizedTest(name = "{0} {1} -> {2}")
     @CsvSource({
-            // Group 1 — identity-access-service (§55)
+            // Group 1 — identity-access-service
             "GET,    /api/v1/auth/me,                                      identity-access-service",
             "GET,    /api/v1/users,                                        identity-access-service",
             "POST,   /api/v1/users,                                        identity-access-service",
@@ -88,23 +87,23 @@ class GatewayIntegrationTest {
             "DELETE, /api/v1/roles/r1,                                     identity-access-service",
             "PUT,    /api/v1/roles/r1/permissions,                         identity-access-service",
             "GET,    /api/v1/permissions,                                  identity-access-service",
-            // Group 1 — resident-management-service (§56)
+            // Group 1 — resident-management-service
             "GET,    /api/v1/residents,                                    resident-management-service",
             "PATCH,  /api/v1/residents/r1,                                 resident-management-service",
             "GET,    /api/v1/owners/o1,                                    resident-management-service",
             "POST,   /api/v1/tenants,                                      resident-management-service",
             "GET,    /api/v1/staff,                                        resident-management-service",
-            // Group 2 — property-unit-service (§57)
+            // Group 2 — property-unit-service
             "POST,   /api/v1/buildings,                                    property-unit-service",
             "GET,    /api/v1/unit-types,                                   property-unit-service",
             "GET,    /api/v1/units,                                        property-unit-service",
             "GET,    /api/v1/ownerships,                                   property-unit-service",
-            // Group 2 — lease-occupancy-service (§58, §93: active-occupancy beats /units/**)
+            // Group 2 — lease-occupancy-service (active-occupancy beats /units/**)
             "GET,    /api/v1/units/u1/active-occupancy,                    lease-occupancy-service",
             "GET,    /api/v1/leases/units/u1,                              lease-occupancy-service",
             "PATCH,  /api/v1/leases/l1/status,                             lease-occupancy-service",
             "GET,    /api/v1/occupancies/residents/r1,                     lease-occupancy-service",
-            // Group 3 — billing-payment-service (§59)
+            // Group 3 — billing-payment-service
             "PUT,    /api/v1/charge-rules/c1,                              billing-payment-service",
             "GET,    /api/v1/invoices/units/u1/period/2026/9,              billing-payment-service",
             "POST,   /api/v1/payments,                                     billing-payment-service",
@@ -113,18 +112,18 @@ class GatewayIntegrationTest {
             "GET,    /api/v1/balance/units/u1,                             billing-payment-service",
             "GET,    /api/v1/reports/finance-dashboard,                    billing-payment-service",
             "GET,    /api/v1/reports/payment-history,                      billing-payment-service",
-            // Group 3 — utility-charge-service (§60)
+            // Group 3 — utility-charge-service
             "PATCH,  /api/v1/utility-charges/c1/status,                    utility-charge-service",
             "GET,    /api/v1/utility-charges/units/u1/summary,             utility-charge-service",
             "GET,    /api/v1/reports/utility-summary,                      utility-charge-service",
             "GET,    /api/v1/reports/utility-consumption,                  utility-charge-service",
-            // Group 4 — operations-service (§61)
+            // Group 4 — operations-service
             "POST,   /api/v1/maintenance-requests,                         operations-service",
             "GET,    /api/v1/work-orders/w1,                               operations-service",
             "GET,    /api/v1/assignments,                                  operations-service",
             "GET,    /api/v1/facilities,                                   operations-service",
             "POST,   /api/v1/bookings,                                     operations-service",
-            // Group 4 — community-service (§62)
+            // Group 4 — community-service
             "POST,   /api/v1/visitors,                                     community-service",
             "GET,    /api/v1/announcements,                                community-service",
             "GET,    /api/v1/notifications,                                community-service",
@@ -209,7 +208,7 @@ class GatewayIntegrationTest {
 
     @ParameterizedTest(name = "not routed: {0} {1}")
     @CsvSource({
-            // Obsolete / never-contracted paths (API-GATEWAY.md §58, §99) and wrong methods (§157)
+            // Obsolete / never-contracted paths and wrong methods
             "POST,   /api/v1/auth/register",
             "GET,    /api/v1/properties",
             "GET,    /api/v1/billing",

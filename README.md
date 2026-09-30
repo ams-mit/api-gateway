@@ -3,11 +3,9 @@
 Central entry point of the Project A Apartment Management System (University of Kelaniya).
 Java 21 · Spring Boot 4.1.1 · Spring Cloud Gateway (WebFlux) · Maven · package `kln.ams.apigateway`.
 
-Canonical contract: [API-GATEWAY.md](API-GATEWAY.md), together with
-[PROJECT-A-CONTRACT-DECISIONS.md](PROJECT-A-CONTRACT-DECISIONS.md),
-[PROJECT-A-GLOBAL-API-STANDARD.md](PROJECT-A-GLOBAL-API-STANDARD.md),
-[PROJECT-A-JWT-SECURITY-STANDARD.md](PROJECT-A-JWT-SECURITY-STANDARD.md) and
-[PROJECT-A-CROSS-SERVICE-API-REGISTRY.md](PROJECT-A-CROSS-SERVICE-API-REGISTRY.md).
+Implements the Project A API Gateway contract, the shared API and JWT security standards, and the
+cross-service API registry. Route table: [docs/gateway-routes.md](docs/gateway-routes.md).
+Security details: [docs/security.md](docs/security.md).
 
 ## 1. Purpose
 
@@ -102,8 +100,8 @@ internal routes, `allowed-callers`. Change routes only through the process in se
 
 ## 11. Internal authorization
 
-Each internal route lists its allowed calling services, taken from the consumer lists in
-`PROJECT-A-CROSS-SERVICE-API-REGISTRY.md`. A registered service that is not listed gets
+Each internal route lists its allowed calling services, taken from the consumer lists in the
+Project A cross-service API registry. A registered service that is not listed gets
 403 `SERVICE_NOT_ALLOWED`; a User JWT gets 403 `FORBIDDEN`.
 
 ## 12. Request ID
@@ -189,15 +187,15 @@ headers and bodies are never logged. The Gateway has no database and no business
 
 ## 22. Related service contracts
 
-Provider contracts (`10-IDENTITY-ACCESS-SERVICE.md` … `17-COMMUNITY-SERVICE.md`) are owned by the service
-teams. Open inconsistencies between the shared documents are listed in
+Each backend team owns its service contract and the OpenAPI document for its endpoints (browsable
+through the Gateway Swagger UI). Open inconsistencies between the shared documents are listed in
 [docs/gateway-routes.md](docs/gateway-routes.md#open-contract-questions).
 
 ## 23. Change management
 
 Before changing a route: identify the provider and consumers, check the cross-service registry, update the
 provider contract, update `application.yml`, `docs/gateway-routes.md` and the integration tests, test
-through the Gateway, and notify the affected teams (API-GATEWAY.md §97).
+through the Gateway, and notify the affected teams.
 
 ## 24. Ownership
 

@@ -26,7 +26,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Gateway OpenAPI document (API-GATEWAY.md §76-§77). It documents Gateway behaviour only: every
+ * Gateway OpenAPI document. It documents Gateway behaviour only: every
  * configured route with its target service, access type, allowed callers and failure behaviour.
  * Request/response schemas remain owned by each backend's OpenAPI, linked from the Swagger UI.
  * The route list is generated from the live route configuration, so it cannot drift from it.

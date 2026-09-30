@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
  * <p>
  * Missing or unknown {@code access} values fall back to {@link Access#USER}, so a route can never
  * become public by omission. Any path under {@code /api/v1/internal/} is always treated as a
- * service route, even if its metadata says otherwise (API-GATEWAY.md §23).
+ * service route, even if its metadata says otherwise.
  */
 public record RouteAccessPolicy(String routeId, Access access, String targetService, Set<String> allowedCallers) {
 

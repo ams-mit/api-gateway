@@ -33,8 +33,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Authenticates and authorizes every routed request according to its route policy
- * (PROJECT-A-JWT-SECURITY-STANDARD.md, API-GATEWAY.md §9-§11, §22-§24).
+ * Authenticates and authorizes every routed request according to its route policy.
  * <ul>
  *   <li>RS256 only; the verification key is selected by token type (Identity Access key for users,
  *       the registered key of the claimed service for services). Claims are trusted only after
@@ -59,7 +58,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final String REQUIRED_ALGORITHM = "RS256";
     private static final String BEARER_PREFIX = "Bearer ";
 
-    /** Canonical Project A roles (PROJECT-A-CONTRACT-DECISIONS.md). */
+    /** Canonical Project A roles. */
     public static final Set<String> CANONICAL_ROLES = Set.of(
             "SYSTEM_ADMINISTRATOR", "APARTMENT_MANAGER", "OWNER", "TENANT_RESIDENT", "FINANCE_OFFICER",
             "MAINTENANCE_COORDINATOR", "TECHNICIAN", "SERVICE_STAFF", "SECURITY_OFFICER");

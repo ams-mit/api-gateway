@@ -15,7 +15,7 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * One access-log line per request (API-GATEWAY.md §67, §138): request ID, route, method, path,
+ * One access-log line per request: request ID, route, method, path,
  * status, duration, authenticated user/service and Gateway error code. Never logs headers,
  * tokens or bodies.
  */

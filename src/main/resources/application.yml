@@ -1,10 +1,10 @@
 # =====================================================================
 # Project A — API Gateway (kln.ams.apigateway)
-# Canonical contract: API-GATEWAY.md. Internal routes / allowed callers:
-# PROJECT-A-CROSS-SERVICE-API-REGISTRY.md. Human-readable table: docs/gateway-routes.md
+# Routes, access rules and internal allowed callers follow the Project A API contracts.
+# Human-readable table: docs/gateway-routes.md
 #
 # Environment-specific values (service URIs, keys, origins) have NO defaults here,
-# so a deployment with missing configuration fails fast (API-GATEWAY.md §121/§153).
+# so a deployment with missing configuration fails fast.
 # Local defaults live in application-dev.yml (activate the "dev" profile).
 # =====================================================================
 server:
@@ -39,7 +39,7 @@ spring:
                 exposed-headers: [X-Request-ID]
                 allow-credentials: true
           default-filters:
-            # Bearer-JWT architecture: never forward cookies or caller-supplied identity headers (§42-45, §156)
+            # Bearer-JWT architecture: never forward cookies or caller-supplied identity headers
             - RemoveRequestHeader=Cookie
             - RemoveRequestHeader=X-User-ID
             - RemoveRequestHeader=X-Role
@@ -53,7 +53,7 @@ spring:
           #   service:         canonical target service name
           #   api-ids:         provider API IDs (registry) where defined
           #   allowed-callers: comma-separated registered services (service routes only)
-          # Specific routes use a lower "order" so they win over broad prefixes (§30, §92-94).
+          # Specific routes use a lower "order" so they win over broad prefixes.
           # -----------------------------------------------------------------
           routes:
             # ================= Internal routes (Service JWT + allow-list) =================
@@ -201,7 +201,7 @@ spring:
               predicates: [Method=GET, "Path=/api/v1/units/{unitId}/active-occupancy"]
               metadata: { access: user, service: lease-occupancy-service }
 
-            # Retired mixed public/internal endpoint; validation moved to /api/v1/internal/... (§58).
+            # Retired mixed public/internal endpoint; validation moved to the /api/v1/internal APIs.
             # Without this, /api/v1/leases/** would forward it with leaseId=validate.
             - id: lease-legacy-validate-blocked
               uri: no://op
@@ -209,7 +209,7 @@ spring:
               predicates: ["Path=/api/v1/leases/validate"]
               metadata: { access: blocked, service: lease-occupancy-service }
 
-            # ================= Group 1: identity-access-service (§55) =================
+            # ================= Group 1: identity-access-service =================
             - id: identity-auth
               uri: ${projecta.services.identity-access-service}
               predicates: [Method=POST, "Path=/api/v1/auth/login"]
@@ -235,7 +235,7 @@ spring:
               predicates: [Method=GET, "Path=/api/v1/permissions"]
               metadata: { access: user, service: identity-access-service }
 
-            # ================= Group 1: resident-management-service (§56) =================
+            # ================= Group 1: resident-management-service =================
             - id: resident-residents
               uri: ${projecta.services.resident-management-service}
               predicates: ["Method=GET,POST,PATCH", "Path=/api/v1/residents,/api/v1/residents/**"]
@@ -256,7 +256,7 @@ spring:
               predicates: ["Method=GET,POST", "Path=/api/v1/staff"]
               metadata: { access: user, service: resident-management-service }
 
-            # ================= Group 2: property-unit-service (§57) =================
+            # ================= Group 2: property-unit-service =================
             - id: property-buildings
               uri: ${projecta.services.property-unit-service}
               predicates: ["Method=GET,POST", "Path=/api/v1/buildings"]
@@ -277,7 +277,7 @@ spring:
               predicates: ["Method=GET,POST", "Path=/api/v1/ownerships"]
               metadata: { access: user, service: property-unit-service }
 
-            # ================= Group 2: lease-occupancy-service (§58) =================
+            # ================= Group 2: lease-occupancy-service =================
             - id: lease-leases
               uri: ${projecta.services.lease-occupancy-service}
               predicates: ["Method=GET,POST,PATCH", "Path=/api/v1/leases,/api/v1/leases/**"]
@@ -288,7 +288,7 @@ spring:
               predicates: ["Method=GET,POST,PATCH", "Path=/api/v1/occupancies,/api/v1/occupancies/**"]
               metadata: { access: user, service: lease-occupancy-service }
 
-            # ================= Group 3: billing-payment-service (§59) =================
+            # ================= Group 3: billing-payment-service =================
             - id: billing-charge-rules
               uri: ${projecta.services.billing-payment-service}
               predicates: ["Method=GET,POST,PUT,PATCH", "Path=/api/v1/charge-rules,/api/v1/charge-rules/**"]
@@ -324,7 +324,7 @@ spring:
               predicates: [Method=GET, "Path=/api/v1/reports/finance-dashboard,/api/v1/reports/arrears,/api/v1/reports/collection-summary,/api/v1/reports/payment-history"]
               metadata: { access: user, service: billing-payment-service }
 
-            # ================= Group 3: utility-charge-service (§60) =================
+            # ================= Group 3: utility-charge-service =================
             - id: utility-charges
               uri: ${projecta.services.utility-charge-service}
               predicates: ["Method=GET,POST,PATCH", "Path=/api/v1/utility-charges,/api/v1/utility-charges/**"]
@@ -335,7 +335,7 @@ spring:
               predicates: [Method=GET, "Path=/api/v1/reports/utility-summary,/api/v1/reports/utility-consumption"]
               metadata: { access: user, service: utility-charge-service }
 
-            # ================= Group 4: operations-service (§61; methods pending its contract) =================
+            # ================= Group 4: operations-service (methods pending its contract) =================
             - id: operations-maintenance
               uri: ${projecta.services.operations-service}
               predicates: ["Method=GET,POST,PUT,PATCH,DELETE", "Path=/api/v1/maintenance-requests,/api/v1/maintenance-requests/**"]
@@ -361,7 +361,7 @@ spring:
               predicates: ["Method=GET,POST,PUT,PATCH,DELETE", "Path=/api/v1/bookings,/api/v1/bookings/**"]
               metadata: { access: user, service: operations-service }
 
-            # ================= Group 4: community-service (§62; methods pending its contract) =================
+            # ================= Group 4: community-service (methods pending its contract) =================
             - id: community-visitors
               uri: ${projecta.services.community-service}
               predicates: ["Method=GET,POST,PUT,PATCH,DELETE", "Path=/api/v1/visitors,/api/v1/visitors/**"]
@@ -377,7 +377,7 @@ spring:
               predicates: ["Method=GET,POST,PUT,PATCH,DELETE", "Path=/api/v1/notifications,/api/v1/notifications/**"]
               metadata: { access: user, service: community-service }
 
-            # ================= Backend OpenAPI documents for the Swagger index (§76) =================
+            # ================= Backend OpenAPI documents for the Swagger index =================
             # Documented path rewrite: /api-docs/<service> -> <service>/v3/api-docs (read-only, GET)
             - id: docs-identity-access-service
               uri: ${projecta.services.identity-access-service}
@@ -492,7 +492,7 @@ management:
       cache:
         time-to-live: ${HEALTH_CACHE_TTL:10s}
       status:
-        # DEGRADED (a backend is down) ranks below UP, so the Gateway itself stays UP / HTTP 200 (§66)
+        # DEGRADED (a backend is down) ranks below UP, so the Gateway itself stays UP / HTTP 200
         order: down, out-of-service, up, degraded, unknown
   health:
     diskspace:

@@ -18,8 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Writes the shared Project A error envelope for Gateway-generated failures
- * (PROJECT-A-GLOBAL-API-STANDARD.md "Standard error response").
+ * Writes the shared Project A error envelope for Gateway-generated failures.
  */
 @Component
 public class ErrorResponseWriter {

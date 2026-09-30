@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 /**
- * Downstream failure behaviour (API-GATEWAY.md §34, §36, §105, §131): an unreachable or slow backend
+ * Downstream failure behaviour: an unreachable or slow backend
  * yields 503 DEPENDENCY_UNAVAILABLE for its routes only, and Gateway health stays UP while the
  * services component reports DEGRADED.
  */
