@@ -30,9 +30,15 @@ class GatewayConfigurationValidatorTest {
     }
 
     @Test
-    void rejectsWildcardOrEmptyOrigins() {
+    void acceptsExactOriginsOrAnyOrigin() {
         assertDoesNotThrow(() -> GatewayConfigurationValidator.validateOrigins(List.of("http://localhost:3000", "https://ams.example.lk")));
-        assertThrows(IllegalStateException.class, () -> GatewayConfigurationValidator.validateOrigins(List.of("*")));
+        assertDoesNotThrow(() -> GatewayConfigurationValidator.validateOrigins(List.of("*")));
+        assertDoesNotThrow(() -> GatewayConfigurationValidator.validateOrigins(List.of(" * ")));
+    }
+
+    @Test
+    void rejectsPartialWildcardsInvalidOrEmptyOrigins() {
+        assertThrows(IllegalStateException.class, () -> GatewayConfigurationValidator.validateOrigins(List.of("localhost:3000")));
         assertThrows(IllegalStateException.class, () -> GatewayConfigurationValidator.validateOrigins(List.of("https://*.example.lk")));
         assertThrows(IllegalStateException.class, () -> GatewayConfigurationValidator.validateOrigins(List.of()));
     }

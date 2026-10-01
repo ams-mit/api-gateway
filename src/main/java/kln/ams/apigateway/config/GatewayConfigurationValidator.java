@@ -1,5 +1,7 @@
 package kln.ams.apigateway.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -13,6 +15,11 @@ import java.util.Set;
  */
 @Component
 public class GatewayConfigurationValidator {
+
+    private static final Logger logger = LoggerFactory.getLogger(GatewayConfigurationValidator.class);
+
+    /** Value of FRONTEND_ALLOWED_ORIGINS that allows browser calls from any origin. */
+    public static final String ANY_ORIGIN = "*";
 
     /** The eight Project A backend services the Gateway must route. */
     public static final Set<String> REQUIRED_SERVICES = Set.of(
@@ -47,8 +54,15 @@ public class GatewayConfigurationValidator {
             throw new IllegalStateException("FRONTEND_ALLOWED_ORIGINS must list at least one origin");
         }
         for (String origin : origins) {
+            if (origin != null && ANY_ORIGIN.equals(origin.trim())) {
+                // Allowed by explicit project decision; safe here because CORS credentials are disabled
+                // and authentication uses the Authorization header, never cookies.
+                logger.warn("FRONTEND_ALLOWED_ORIGINS is '*': browser calls are allowed from any origin");
+                continue;
+            }
             if (origin == null || origin.contains("*") || !isHttpUri(origin.trim(), false)) {
-                throw new IllegalStateException("Invalid frontend origin '" + origin + "': wildcards are not allowed");
+                throw new IllegalStateException("Invalid frontend origin '" + origin
+                        + "': use '*' for any origin, or exact origins such as https://ams.example.lk");
             }
         }
     }

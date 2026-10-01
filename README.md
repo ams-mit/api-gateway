@@ -127,8 +127,11 @@ because of a backend outage. `GET /actuator/info` shows the application name onl
 
 ## 15. CORS
 
-Only the origins in `FRONTEND_ALLOWED_ORIGINS` (comma-separated) are allowed; wildcards are rejected at
-startup. Preflight requests are handled for every route.
+`FRONTEND_ALLOWED_ORIGINS` is either a comma-separated list of exact origins or `*` for any origin
+(project decision; a warning is logged at startup). Partial wildcards such as `https://*.example.lk` are
+rejected. CORS credentials are disabled: tokens are sent in the `Authorization` header and cookies are
+never used, so the frontend must not set `withCredentials` / `credentials: "include"`. Preflight requests
+are handled for every route.
 
 ## 16. Local setup
 

@@ -122,3 +122,7 @@ cross-service API registry. Each point needs confirmation from the teams involve
    from the JWT standard.
 5. **Role rules.** Route-level role checks are expected, but no document says which roles may use which
    route. The Gateway checks that roles are canonical and leaves role authorization to the backends.
+6. **CORS origins.** The Gateway specification asks for configured frontend origins only. By project
+   decision the Gateway also accepts `FRONTEND_ALLOWED_ORIGINS=*`, including in production. This is
+   paired with CORS credentials disabled, since tokens travel in the `Authorization` header and cookies are
+   never used.

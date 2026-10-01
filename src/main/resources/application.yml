@@ -37,7 +37,9 @@ spring:
                 allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
                 allowed-headers: [Authorization, Content-Type, Accept, X-Request-ID]
                 exposed-headers: [X-Request-ID]
-                allow-credentials: true
+                # Bearer tokens travel in the Authorization header and cookies are stripped, so CORS
+                # credentials are never needed. Keeping this false also makes "*" a valid origin value.
+                allow-credentials: false
           default-filters:
             # Bearer-JWT architecture: never forward cookies or caller-supplied identity headers
             - RemoveRequestHeader=Cookie
@@ -433,7 +435,7 @@ projecta:
     community-service: ${COMMUNITY_SERVICE_URI}
 
   security:
-    # Browser origins allowed by CORS (validated at startup: no "*")
+    # Browser origins allowed by CORS: a comma-separated list, or "*" for any origin
     allowed-origins: ${FRONTEND_ALLOWED_ORIGINS}
     jwt:
       # Each key value is a location (file:/..., classpath:...) or the PEM text itself.

@@ -81,8 +81,11 @@ Docker image, or written in `application.yml`.
 
 ## CORS
 
-Only the origins in `FRONTEND_ALLOWED_ORIGINS` are allowed; wildcards are rejected at startup. Allowed
-request headers are `Authorization`, `Content-Type`, `Accept` and `X-Request-ID`, and `X-Request-ID` is
+`FRONTEND_ALLOWED_ORIGINS` is either a comma-separated list of exact origins or `*` (any origin, by
+project decision; logged as a warning at startup). Partial wildcards are rejected. CORS credentials are
+disabled (`allow-credentials: false`): authentication uses the `Authorization` header and cookies are
+stripped, so allowing any origin does not let other sites ride on a browser session. Allowed request
+headers are `Authorization`, `Content-Type`, `Accept` and `X-Request-ID`, and `X-Request-ID` is
 exposed to the browser.
 
 ## Not implemented yet
