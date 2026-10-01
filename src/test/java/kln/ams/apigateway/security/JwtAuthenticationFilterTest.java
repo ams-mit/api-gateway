@@ -204,6 +204,16 @@ class JwtAuthenticationFilterTest {
     // ---------------- success ----------------
 
     @Test
+    void anyRegisteredService_onInternalRouteWithoutAllowList_isForwarded() {
+        Route openInternal = route("billing-internal", Map.of("access", "service", "service", "billing-payment-service"));
+        String token = serviceToken(RESIDENT).signWith(residentKeys.getPrivate(), Jwts.SIG.RS256).compact();
+
+        filter.filter(exchange(openInternal, "/api/v1/internal/payments/p1/status", token), filterChain).block();
+
+        assertEquals(RESIDENT, captureForwarded().getAttribute(JwtAuthenticationFilter.ATTR_USER_ID));
+    }
+
+    @Test
     void validUserToken_onUserRoute_isForwardedWithPrincipal() {
         String token = userToken().signWith(identityKeys.getPrivate(), Jwts.SIG.RS256).compact();
 

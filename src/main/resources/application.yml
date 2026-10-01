@@ -54,147 +54,91 @@ spring:
           #   access:          public | user | service   (missing => user)
           #   service:         canonical target service name
           #   api-ids:         provider API IDs (registry) where defined
-          #   allowed-callers: comma-separated registered services (service routes only)
+          #   allowed-callers: optional comma-separated services; if absent, any registered service may call
           # Specific routes use a lower "order" so they win over broad prefixes.
           # -----------------------------------------------------------------
           routes:
-            # ================= Internal routes (Service JWT + allow-list) =================
-            # --- identity-access-service ---
-            - id: identity-internal-user-validate
-              uri: ${projecta.services.identity-access-service}
-              order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/users/{userId}/validate"]
-              metadata:
-                access: service
-                service: identity-access-service
-                api-ids: IAM-INT-001
-                allowed-callers: resident-management-service,property-unit-service,lease-occupancy-service,billing-payment-service,operations-service,community-service
-
-            - id: identity-internal-user-status
-              uri: ${projecta.services.identity-access-service}
-              order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/users/{userId}/status"]
-              metadata:
-                access: service
-                service: identity-access-service
-                api-ids: IAM-INT-002
-                allowed-callers: resident-management-service,billing-payment-service,operations-service,community-service
-
-            # --- resident-management-service ---
-            - id: resident-internal-resident-validate
-              uri: ${projecta.services.resident-management-service}
-              order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/residents/{residentId}/validate"]
-              metadata:
-                access: service
-                service: resident-management-service
-                api-ids: RES-INT-001
-                allowed-callers: property-unit-service,lease-occupancy-service,billing-payment-service,operations-service,community-service
-
+            # ================= Internal routes (any verified registered service) =================
+            # Internal calls are routed to the service that OWNS the resource named after /internal/.
+            # Any HTTP method is forwarded; if the owner has no such endpoint, its own 404 is returned.
+            # Resource names no service owns get a Gateway 404 ROUTE_NOT_FOUND.
+            # Any registered service with a verified Service JWT may call any internal route; a route can
+            # still restrict callers by adding "allowed-callers" metadata.
+            #
+            # 1) Shared prefixes: /internal/users/{id}/... and /internal/units/{id}/... sub-resources that
+            #    belong to a different service than the user/unit itself (evaluated first).
             - id: resident-internal-user-relationships
               uri: ${projecta.services.resident-management-service}
-              order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/users/{userId}/relationships"]
-              metadata:
-                access: service
-                service: resident-management-service
-                api-ids: RES-INT-002
-                allowed-callers: property-unit-service,lease-occupancy-service,operations-service,community-service
+              order: -30
+              predicates: ["Path=/api/v1/internal/users/{userId}/relationships,/api/v1/internal/users/{userId}/relationships/**"]
+              metadata: { access: service, service: resident-management-service, api-ids: RES-INT-002 }
 
-            # --- property-unit-service ---
-            - id: property-internal-unit-validation
+            - id: lease-internal-user-occupancy
+              uri: ${projecta.services.lease-occupancy-service}
+              order: -30
+              predicates: ["Path=/api/v1/internal/users/{userId}/occupancy,/api/v1/internal/users/{userId}/occupancy/**,/api/v1/internal/units/{unitId}/occupancy,/api/v1/internal/units/{unitId}/occupancy/**,/api/v1/internal/units/{unitId}/occupants,/api/v1/internal/units/{unitId}/occupants/**"]
+              metadata: { access: service, service: lease-occupancy-service, api-ids: "LEASE-INT-001,LEASE-INT-002,LEASE-INT-003" }
+
+            - id: billing-internal-unit-user-balance
+              uri: ${projecta.services.billing-payment-service}
+              order: -30
+              predicates: ["Path=/api/v1/internal/units/{unitId}/balance,/api/v1/internal/units/{unitId}/balance/**,/api/v1/internal/users/{userId}/balance-status,/api/v1/internal/users/{userId}/balance-status/**"]
+              metadata: { access: service, service: billing-payment-service, api-ids: "BILL-INT-001,BILL-INT-002" }
+
+            - id: utility-internal-unit-charges
+              uri: ${projecta.services.utility-charge-service}
+              order: -30
+              predicates: ["Path=/api/v1/internal/units/{unitId}/charges,/api/v1/internal/units/{unitId}/charges/**"]
+              metadata: { access: service, service: utility-charge-service, api-ids: UTIL-INT-001 }
+
+            # 2) Resource ownership (canonical API ownership of Project A)
+            - id: identity-internal
+              uri: ${projecta.services.identity-access-service}
+              order: -20
+              predicates: ["Path=/api/v1/internal/users/**,/api/v1/internal/roles/**,/api/v1/internal/permissions/**"]
+              metadata: { access: service, service: identity-access-service, api-ids: "IAM-INT-001,IAM-INT-002" }
+
+            - id: resident-internal
+              uri: ${projecta.services.resident-management-service}
+              order: -20
+              predicates: ["Path=/api/v1/internal/residents/**,/api/v1/internal/owners/**,/api/v1/internal/tenants/**,/api/v1/internal/staff/**"]
+              metadata: { access: service, service: resident-management-service, api-ids: RES-INT-001 }
+
+            - id: property-internal
               uri: ${projecta.services.property-unit-service}
               order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/units/{unitId}/exists,/api/v1/internal/units/{unitId}/validate,/api/v1/internal/units/{unitId}/ownership"]
-              metadata:
-                access: service
-                service: property-unit-service
-                api-ids: PROP-INT-001,PROP-INT-002,PROP-INT-003
-                allowed-callers: resident-management-service,lease-occupancy-service,billing-payment-service,operations-service,community-service
+              predicates: ["Path=/api/v1/internal/units/**,/api/v1/internal/buildings/**,/api/v1/internal/floors/**,/api/v1/internal/unit-types/**,/api/v1/internal/ownerships/**"]
+              metadata: { access: service, service: property-unit-service, api-ids: "PROP-INT-001,PROP-INT-002,PROP-INT-003,PROP-INT-004" }
 
-            - id: property-internal-unit-status
-              uri: ${projecta.services.property-unit-service}
-              order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/units/{unitId}/status"]
-              metadata:
-                access: service
-                service: property-unit-service
-                api-ids: PROP-INT-004
-                allowed-callers: lease-occupancy-service,billing-payment-service,operations-service,community-service
-
-            # --- lease-occupancy-service ---
-            - id: lease-internal-occupancy
+            - id: lease-internal
               uri: ${projecta.services.lease-occupancy-service}
               order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/units/{unitId}/occupancy,/api/v1/internal/units/{unitId}/occupants,/api/v1/internal/users/{userId}/occupancy"]
-              metadata:
-                access: service
-                service: lease-occupancy-service
-                api-ids: LEASE-INT-001,LEASE-INT-002,LEASE-INT-003
-                allowed-callers: resident-management-service,billing-payment-service,operations-service,community-service
+              predicates: ["Path=/api/v1/internal/leases/**,/api/v1/internal/occupancies/**,/api/v1/internal/occupants/**"]
+              metadata: { access: service, service: lease-occupancy-service }
 
-            # --- billing-payment-service ---
-            - id: billing-internal-balance
+            - id: billing-internal
               uri: ${projecta.services.billing-payment-service}
               order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/units/{unitId}/balance,/api/v1/internal/users/{userId}/balance-status"]
-              metadata:
-                access: service
-                service: billing-payment-service
-                api-ids: BILL-INT-001,BILL-INT-002
-                allowed-callers: operations-service,community-service
+              predicates: ["Path=/api/v1/internal/payments/**,/api/v1/internal/balance/**,/api/v1/internal/invoices/**,/api/v1/internal/charge-rules/**,/api/v1/internal/receipts/**,/api/v1/internal/adjustments/**"]
+              metadata: { access: service, service: billing-payment-service, api-ids: BILL-INT-003 }
 
-            - id: billing-internal-payment-status
-              uri: ${projecta.services.billing-payment-service}
-              order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/payments/{paymentId}/status"]
-              metadata:
-                access: service
-                service: billing-payment-service
-                api-ids: BILL-INT-003
-                allowed-callers: community-service
-
-            # --- utility-charge-service ---
             - id: utility-internal
               uri: ${projecta.services.utility-charge-service}
               order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/units/{unitId}/charges,/api/v1/internal/utility-charges/{chargeId}/validate"]
-              metadata:
-                access: service
-                service: utility-charge-service
-                api-ids: UTIL-INT-001,UTIL-INT-002
-                allowed-callers: billing-payment-service
+              predicates: ["Path=/api/v1/internal/utility-charges/**"]
+              metadata: { access: service, service: utility-charge-service, api-ids: UTIL-INT-002 }
 
-            # --- community-service ---
-            - id: community-internal-notifications
+            - id: operations-internal
+              uri: ${projecta.services.operations-service}
+              order: -20
+              predicates: ["Path=/api/v1/internal/maintenance-requests/**,/api/v1/internal/work-orders/**,/api/v1/internal/assignments/**,/api/v1/internal/facilities/**,/api/v1/internal/bookings/**"]
+              metadata: { access: service, service: operations-service }
+
+            - id: community-internal
               uri: ${projecta.services.community-service}
               order: -20
-              predicates: [Method=POST, "Path=/api/v1/internal/notifications"]
-              metadata:
-                access: service
-                service: community-service
-                api-ids: COMM-INT-001
-                allowed-callers: resident-management-service,billing-payment-service,utility-charge-service,operations-service,lease-occupancy-service,property-unit-service
-
-            - id: community-internal-notification-status
-              uri: ${projecta.services.community-service}
-              order: -20
-              predicates: [Method=GET, "Path=/api/v1/internal/notifications/{notificationId}/status"]
-              metadata:
-                access: service
-                service: community-service
-                api-ids: COMM-INT-002
-                allowed-callers: resident-management-service,billing-payment-service,operations-service
-
-            - id: community-internal-resident-notifications
-              uri: ${projecta.services.community-service}
-              order: -20
-              predicates: [Method=POST, "Path=/api/v1/internal/notifications/resident"]
-              metadata:
-                access: service
-                service: community-service
-                api-ids: COMM-INT-003
-                allowed-callers: operations-service,billing-payment-service,lease-occupancy-service
+              predicates: ["Path=/api/v1/internal/notifications,/api/v1/internal/notifications/**,/api/v1/internal/visitors/**,/api/v1/internal/announcements/**"]
+              metadata: { access: service, service: community-service, api-ids: "COMM-INT-001,COMM-INT-002,COMM-INT-003" }
 
             # ================= Specific user routes that overlap broad prefixes =================
             - id: lease-active-occupancy

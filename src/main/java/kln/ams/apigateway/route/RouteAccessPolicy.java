@@ -23,7 +23,7 @@ public record RouteAccessPolicy(String routeId, Access access, String targetServ
         PUBLIC,
         /** User JWT required. */
         USER,
-        /** Service JWT required and the caller must be in {@code allowed-callers}. */
+        /** Service JWT from any registered service (restricted to {@code allowed-callers} if the route lists them). */
         SERVICE,
         /** Explicitly retired path that would otherwise match a broader route; answered with 404. */
         BLOCKED
@@ -41,8 +41,12 @@ public record RouteAccessPolicy(String routeId, Access access, String targetServ
                 parseCallers(metadata.get("allowed-callers")));
     }
 
+    /**
+     * Whether an authenticated service may use this route. Routes without an {@code allowed-callers}
+     * list accept any registered service; the backend applies its own endpoint-level rules.
+     */
     public boolean allowsCaller(String serviceName) {
-        return allowedCallers.contains(serviceName);
+        return allowedCallers.isEmpty() || allowedCallers.contains(serviceName);
     }
 
     private static Access parseAccess(Object value) {

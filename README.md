@@ -95,14 +95,17 @@ In production, generate fresh keys in the deployment's secret store; each privat
 ## 10. Route configuration
 
 Each route has an `id`, `Method` and `Path` predicates, a target `uri`, and `metadata`:
-`access` (`public` | `user` | `service` | `blocked`; missing means `user`), `service`, `api-ids` and, for
-internal routes, `allowed-callers`. Change routes only through the process in section 23.
+`access` (`public` | `user` | `service` | `blocked`; missing means `user`), `service`, `api-ids` and an
+optional `allowed-callers` list. Internal routes have no `Method` predicate (any method is forwarded). Change routes only through the process in section 23.
 
 ## 11. Internal authorization
 
-Each internal route lists its allowed calling services, taken from the consumer lists in the
-Project A cross-service API registry. A registered service that is not listed gets
-403 `SERVICE_NOT_ALLOWED`; a User JWT gets 403 `FORBIDDEN`.
+Any registered service with a valid Service JWT may call any internal endpoint (project decision; there
+are no per-endpoint allow-lists). Internal paths are routed by resource ownership:
+`/api/v1/internal/<resource>/...` goes to the service that owns `<resource>`, with any HTTP method. If
+that service doesn't have the endpoint, its own 404 is returned; an unknown resource name gets the
+Gateway's 404 `ROUTE_NOT_FOUND`. Unregistered services get 401 `UNREGISTERED_SERVICE`, and a User JWT gets
+403 `FORBIDDEN`. Backends apply their own endpoint-level caller rules where needed.
 
 ## 12. Request ID
 
@@ -166,7 +169,7 @@ and set the `*_SERVICE_URI` values to their service names.
 
 Unit tests cover JWT validation (every error code), route policy, key loading, signing, request IDs, error
 mapping, configuration validation and health. `GatewayIntegrationTest` boots the Gateway against one stub
-backend per service and checks every contract route, every internal allow-list (allowed and denied),
+backend per service and checks every contract route, internal ownership routing for every service (any caller, any method),
 removed routes, method restrictions, JWT replacement, header stripping, CORS, health and Swagger.
 `GatewayDependencyFailureIntegrationTest` checks 503 behaviour for unreachable and slow backends.
 

@@ -30,8 +30,8 @@ Implementation: `kln.ams.apigateway.security.JwtAuthenticationFilter`,
    User tokens also need a UUID `sub` and a `roles` array containing only canonical roles:
    `SYSTEM_ADMINISTRATOR`, `APARTMENT_MANAGER`, `OWNER`, `TENANT_RESIDENT`, `FINANCE_OFFICER`,
    `MAINTENANCE_COORDINATOR`, `TECHNICIAN`, `SERVICE_STAFF`, `SECURITY_OFFICER`.
-6. Route authorization: user routes accept only User JWTs; internal routes accept only Service JWTs from
-   callers on the route's `allowed-callers` list.
+6. Route authorization: user routes accept only User JWTs; internal routes accept only Service JWTs, from
+   any registered service (a route may optionally restrict callers with `allowed-callers`).
 7. The Gateway signs a new JWT (RS256, `typ: JWT`, Gateway private key, 5 minutes by default) containing
    only `sub`, `type`, `roles` (users only), `iat` and `exp`, and forwards it. The original token is never
    forwarded. On public routes, any caller `Authorization` header is removed.
@@ -49,7 +49,7 @@ Implementation: `kln.ams.apigateway.security.JwtAuthenticationFilter`,
 | 401 | `INVALID_TOKEN_CLAIMS` | Missing `sub`/`iat`/`exp`, non-UUID user `sub`, or missing/non-canonical `roles` |
 | 401 | `UNREGISTERED_SERVICE` | Service JWT from a service without a registered key |
 | 403 | `FORBIDDEN` | User JWT on an internal route |
-| 403 | `SERVICE_NOT_ALLOWED` | Service not on the route's allow-list, or a Service JWT on a user route |
+| 403 | `SERVICE_NOT_ALLOWED` | Service JWT on a user route (or a service outside a route's optional `allowed-callers` list) |
 | 404 | `ROUTE_NOT_FOUND` | No route for the method + path, or a blocked (retired) path |
 | 503 | `DEPENDENCY_UNAVAILABLE` | Backend unreachable, dropped the connection, or slower than the read timeout; `details.service` names it |
 | 500 | `INTERNAL_SERVER_ERROR` | Unexpected Gateway failure |

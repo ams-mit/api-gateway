@@ -71,7 +71,10 @@ class GatewayIntegrationTest {
         LAST_HEADERS.clear();
         LAST_PATH.clear();
         client = WebTestClient.bindToServer().baseUrl("http://localhost:" + port)
-                .responseTimeout(Duration.ofSeconds(10)).build();
+                .responseTimeout(Duration.ofSeconds(10))
+                // The generated Gateway OpenAPI document is larger than the 256 KB default
+                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(4 * 1024 * 1024))
+                .build();
     }
 
     // ================= Route registry: every contract route reaches its owner =================
@@ -177,33 +180,64 @@ class GatewayIntegrationTest {
         assertNull(claims.get("roles"));
     }
 
-    @ParameterizedTest(name = "{2} denied on {0} {1}")
+    @ParameterizedTest(name = "{2}: {0} {1} -> {3}")
     @CsvSource({
-            // Callers not listed as consumers of the provider API in the cross-service registry
-            "GET,  /api/v1/internal/users/u1/validate,             utility-charge-service",
-            "GET,  /api/v1/internal/users/u1/status,               property-unit-service",
-            "GET,  /api/v1/internal/residents/r1/validate,         identity-access-service",
-            "GET,  /api/v1/internal/users/u1/relationships,        billing-payment-service",
-            "GET,  /api/v1/internal/units/u1/exists,               utility-charge-service",
-            "GET,  /api/v1/internal/units/u1/status,               resident-management-service",
-            "GET,  /api/v1/internal/units/u1/occupancy,            property-unit-service",
-            "GET,  /api/v1/internal/users/u1/occupancy,            utility-charge-service",
-            "GET,  /api/v1/internal/units/u1/balance,              resident-management-service",
-            "GET,  /api/v1/internal/users/u1/balance-status,       lease-occupancy-service",
-            "GET,  /api/v1/internal/payments/p1/status,            operations-service",
-            "GET,  /api/v1/internal/units/u1/charges,              operations-service",
-            "GET,  /api/v1/internal/utility-charges/c1/validate,   community-service",
-            "POST, /api/v1/internal/notifications,                 identity-access-service",
-            "GET,  /api/v1/internal/notifications/n1/status,       community-service",
-            "POST, /api/v1/internal/notifications/resident,        resident-management-service",
+            // Any registered service may call any internal endpoint (no allow-list), including callers
+            // the cross-service registry does not list as consumers
+            "GET,    /api/v1/internal/users/u1/validate,             utility-charge-service,      identity-access-service",
+            "GET,    /api/v1/internal/residents/r1/validate,         identity-access-service,     resident-management-service",
+            "GET,    /api/v1/internal/units/u1/status,               resident-management-service, property-unit-service",
+            "GET,    /api/v1/internal/units/u1/occupancy,            property-unit-service,       lease-occupancy-service",
+            "GET,    /api/v1/internal/payments/p1/status,            operations-service,          billing-payment-service",
+            "GET,    /api/v1/internal/units/u1/charges,              operations-service,          utility-charge-service",
+            "POST,   /api/v1/internal/notifications,                 identity-access-service,     community-service",
+            // Ownership routing: any method, and internal resources not listed in the registry
+            "POST,   /api/v1/internal/users/u1/validate,             billing-payment-service,     identity-access-service",
+            "PATCH,  /api/v1/internal/users/u1/email,                resident-management-service, identity-access-service",
+            "GET,    /api/v1/internal/roles/r1,                      community-service,           identity-access-service",
+            "GET,    /api/v1/internal/owners/o1,                     billing-payment-service,     resident-management-service",
+            "GET,    /api/v1/internal/units/u1/floor,                operations-service,          property-unit-service",
+            "GET,    /api/v1/internal/buildings/b1,                  lease-occupancy-service,     property-unit-service",
+            "GET,    /api/v1/internal/leases/l1,                     billing-payment-service,     lease-occupancy-service",
+            "GET,    /api/v1/internal/occupancies/o1,                community-service,           lease-occupancy-service",
+            "GET,    /api/v1/internal/balance/u1,                    operations-service,          billing-payment-service",
+            "GET,    /api/v1/internal/invoices/i1,                   community-service,           billing-payment-service",
+            "GET,    /api/v1/internal/utility-charges/c1,            billing-payment-service,     utility-charge-service",
+            "GET,    /api/v1/internal/maintenance-requests/m1,       community-service,           operations-service",
+            "POST,   /api/v1/internal/bookings,                      community-service,           operations-service",
+            "GET,    /api/v1/internal/visitors/v1,                   operations-service,          community-service",
+            "DELETE, /api/v1/internal/announcements/a1,              operations-service,          community-service",
+            // Sub-resources on shared prefixes still reach the right owner
+            "GET,    /api/v1/internal/users/u1/relationships/x,      operations-service,          resident-management-service",
+            "GET,    /api/v1/internal/units/u1/occupants/current,    community-service,           lease-occupancy-service",
     })
-    void internalRoutes_denyCallersNotOnAllowList(String method, String path, String caller) {
+    void internalRoutes_acceptAnyRegisteredService_andRouteByResourceOwner(String method, String path, String caller, String owner) {
         client.method(HttpMethod.valueOf(method)).uri(path)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + serviceJwt(caller))
                 .exchange()
-                .expectStatus().isForbidden()
-                .expectBody().jsonPath("$.error.code").isEqualTo("SERVICE_NOT_ALLOWED");
-        assertTrue(LAST_PATH.isEmpty(), "request must not reach any backend");
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.service").isEqualTo(owner);
+        Claims claims = verifyGatewayJwt(bearer(owner));
+        assertEquals(caller, claims.getSubject());
+        assertEquals("service", claims.get("type", String.class));
+    }
+
+    @Test
+    void internalRoute_unregisteredService_isStillRejected() {
+        String token = Jwts.builder()
+                .subject("unknown-service")
+                .claim("type", "service")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60000))
+                .signWith(TestKeyUtils.generateRsaKeyPair().getPrivate(), Jwts.SIG.RS256)
+                .compact();
+
+        client.get().uri("/api/v1/internal/users/u1/validate")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.error.code").isEqualTo("UNREGISTERED_SERVICE");
+        assertTrue(LAST_PATH.isEmpty());
     }
 
     @ParameterizedTest(name = "not routed: {0} {1}")
@@ -218,15 +252,11 @@ class GatewayIntegrationTest {
             "GET,    /api/v1/community",
             "GET,    /api/v1/admin/users",
             "GET,    /api/v1/leases/validate",
-            "GET,    /api/v1/internal/balance/u1",
-            "GET,    /api/v1/internal/invoices/i1",
-            "GET,    /api/v1/internal/leases/l1",
-            "GET,    /api/v1/internal/maintenance-requests/m1",
             "GET,    /api/v1/internal/unknown",
             "DELETE, /api/v1/residents/r1",
             "DELETE, /api/v1/buildings",
             "POST,   /api/v1/permissions",
-            "POST,   /api/v1/internal/users/u1/validate",
+            "GET,    /api/v1/internal/reports/summary",
     })
     void unknownRoutes_return404RouteNotFound(String method, String path) {
         client.method(HttpMethod.valueOf(method)).uri(path)
@@ -365,7 +395,7 @@ class GatewayIntegrationTest {
                 .expectBody()
                 .jsonPath("$.info.title").isEqualTo("Project A — API Gateway")
                 .jsonPath("$.paths['/api/v1/internal/notifications'].post.summary")
-                .isEqualTo("community-internal-notifications → community-service")
+                .isEqualTo("community-internal → community-service")
                 .jsonPath("$.paths['/api/v1/auth/login'].post.security").isEmpty();
 
         client.get().uri("/api-docs/community-service")

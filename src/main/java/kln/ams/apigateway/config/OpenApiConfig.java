@@ -66,6 +66,10 @@ public class OpenApiConfig {
                     continue;
                 }
                 List<String> methods = predicateValues(route, "Method");
+                if (methods.isEmpty()) {
+                    // No Method predicate: the route forwards every method
+                    methods = List.of("GET", "POST", "PUT", "PATCH", "DELETE");
+                }
                 for (String path : predicateValues(route, "Path")) {
                     PathItem item = paths.computeIfAbsent(path, p -> new PathItem());
                     for (String method : methods) {
@@ -92,6 +96,8 @@ public class OpenApiConfig {
                 }).append("  \n");
         if (metadata.containsKey("allowed-callers")) {
             description.append("**Allowed callers:** ").append(metadata.get("allowed-callers")).append("  \n");
+        } else if ("service".equals(access)) {
+            description.append("**Allowed callers:** any registered service  \n");
         }
         if (metadata.containsKey("api-ids")) {
             description.append("**Provider API IDs:** ").append(metadata.get("api-ids")).append("  \n");

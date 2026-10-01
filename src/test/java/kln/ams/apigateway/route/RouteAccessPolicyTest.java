@@ -36,6 +36,7 @@ class RouteAccessPolicyTest {
 
         assertEquals(Access.SERVICE, policy.access());
         assertTrue(policy.allowedCallers().isEmpty());
+        assertTrue(policy.allowsCaller("any-registered-service"), "no allow-list means any registered service");
     }
 
     private static Route route(Map<String, Object> metadata) {

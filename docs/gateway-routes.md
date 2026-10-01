@@ -4,10 +4,9 @@ The routes are configured in `src/main/resources/application.yml`
 (`spring.cloud.gateway.server.webflux.routes`). This page mirrors that configuration. The Gateway's own
 OpenAPI document (`/v3/api-docs`) is generated from the live configuration, so it always matches.
 
-Routes follow the Project A API contracts: public/user routes come from each service's API contract, and
-internal routes with their allowed callers come from the Project A cross-service API registry. Request
-paths are forwarded unchanged. The only rewrite is the documentation route
-(`/api-docs/<service>` → `<service>/v3/api-docs`).
+Public/user routes come from each service's API contract. Internal routes are routed by resource
+ownership, as defined by the Project A contracts. Request paths are forwarded unchanged. The only rewrite
+is the documentation route (`/api-docs/<service>` → `<service>/v3/api-docs`).
 
 ## Access types
 
@@ -15,35 +14,48 @@ paths are forwarded unchanged. The only rewrite is the documentation route
 |---|---|---|
 | public | none | The caller's `Authorization` header is removed before forwarding |
 | user | User JWT | RS256, Identity Access key, `type=user`, UUID `sub`, canonical `roles`, `iat`, `exp`. Service tokens get 403 |
-| service | Service JWT | RS256, registered key of the claimed service, `type=service`, `iat`, `exp`, caller on the allow-list. User tokens get 403 |
+| service | Service JWT | RS256, registered key of the claimed service, `type=service`, `iat`, `exp`. Any registered service may call. User tokens get 403 |
 | blocked | — | Retired path; answered with 404 `ROUTE_NOT_FOUND` |
 
 A route without an `access` value is treated as `user`, so no route becomes public by accident. Any path
 under `/api/v1/internal/` is always service-only, whatever its metadata says.
 
-## Internal routes (Service JWT + allow-list)
+## Internal routes (any verified registered service)
 
-These are evaluated first (`order: -20`). There is no catch-all `/api/v1/internal/**` route, so an
-internal path that isn't listed here returns 404.
+**Who may call:** any of the eight registered services with a valid Service JWT may call any internal
+route. There are no per-endpoint allow-lists; each backend applies its own endpoint-level caller rules if it
+needs them. A route can still restrict callers by adding an `allowed-callers` metadata entry (403
+`SERVICE_NOT_ALLOWED` for others), but no route does today. Unregistered services get 401
+`UNREGISTERED_SERVICE`; User JWTs get 403 `FORBIDDEN`.
 
-| Route ID | Method | Path | Provider | API ID | Allowed callers |
-|---|---|---|---|---|---|
-| identity-internal-user-validate | GET | `/api/v1/internal/users/{userId}/validate` | identity-access-service | IAM-INT-001 | resident-management, property-unit, lease-occupancy, billing-payment, operations, community |
-| identity-internal-user-status | GET | `/api/v1/internal/users/{userId}/status` | identity-access-service | IAM-INT-002 | resident-management, billing-payment, operations, community |
-| resident-internal-resident-validate | GET | `/api/v1/internal/residents/{residentId}/validate` | resident-management-service | RES-INT-001 | property-unit, lease-occupancy, billing-payment, operations, community |
-| resident-internal-user-relationships | GET | `/api/v1/internal/users/{userId}/relationships` | resident-management-service | RES-INT-002 | property-unit, lease-occupancy, operations, community |
-| property-internal-unit-validation | GET | `/api/v1/internal/units/{unitId}/exists`, `/validate`, `/ownership` | property-unit-service | PROP-INT-001..003 | resident-management, lease-occupancy, billing-payment, operations, community |
-| property-internal-unit-status | GET | `/api/v1/internal/units/{unitId}/status` | property-unit-service | PROP-INT-004 | lease-occupancy, billing-payment, operations, community |
-| lease-internal-occupancy | GET | `/api/v1/internal/units/{unitId}/occupancy`, `/api/v1/internal/units/{unitId}/occupants`, `/api/v1/internal/users/{userId}/occupancy` | lease-occupancy-service | LEASE-INT-001..003 | resident-management, billing-payment, operations, community |
-| billing-internal-balance | GET | `/api/v1/internal/units/{unitId}/balance`, `/api/v1/internal/users/{userId}/balance-status` | billing-payment-service | BILL-INT-001, 002 | operations, community |
-| billing-internal-payment-status | GET | `/api/v1/internal/payments/{paymentId}/status` | billing-payment-service | BILL-INT-003 | community |
-| utility-internal | GET | `/api/v1/internal/units/{unitId}/charges`, `/api/v1/internal/utility-charges/{chargeId}/validate` | utility-charge-service | UTIL-INT-001, 002 | billing-payment |
-| community-internal-notifications | POST | `/api/v1/internal/notifications` | community-service | COMM-INT-001 | resident-management, billing-payment, utility-charge, operations, lease-occupancy, property-unit |
-| community-internal-notification-status | GET | `/api/v1/internal/notifications/{notificationId}/status` | community-service | COMM-INT-002 | resident-management, billing-payment, operations |
-| community-internal-resident-notifications | POST | `/api/v1/internal/notifications/resident` | community-service | COMM-INT-003 | operations, billing-payment, lease-occupancy |
+**Where it goes:** `/api/v1/internal/<resource>/...` is forwarded, with **any HTTP method**, to the service
+that owns `<resource>`. If the owner implements the endpoint, it answers; if not, the owner's own 404 is
+returned. A resource name that no service owns gets the Gateway's 404 `ROUTE_NOT_FOUND`.
 
-The caller names above omit the `-service` suffix to keep the table narrow; the configuration uses the
-full names. `identity-access-service` has a registered key but doesn't call any internal API.
+Sub-resources on the shared `users/{id}` and `units/{id}` prefixes belong to other services, so they are
+matched first (`order: -30`):
+
+| Route ID | Paths (each also with `/**`) | Owner | Registry API |
+|---|---|---|---|
+| resident-internal-user-relationships | `/api/v1/internal/users/{userId}/relationships` | resident-management-service | RES-INT-002 |
+| lease-internal-user-occupancy | `/api/v1/internal/users/{userId}/occupancy`, `/api/v1/internal/units/{unitId}/occupancy`, `/api/v1/internal/units/{unitId}/occupants` | lease-occupancy-service | LEASE-INT-001..003 |
+| billing-internal-unit-user-balance | `/api/v1/internal/units/{unitId}/balance`, `/api/v1/internal/users/{userId}/balance-status` | billing-payment-service | BILL-INT-001, 002 |
+| utility-internal-unit-charges | `/api/v1/internal/units/{unitId}/charges` | utility-charge-service | UTIL-INT-001 |
+
+Everything else is routed by resource owner (`order: -20`):
+
+| Route ID | Internal resources (`/api/v1/internal/<resource>/**`) | Owner | Registry APIs included |
+|---|---|---|---|
+| identity-internal | `users`, `roles`, `permissions` | identity-access-service | IAM-INT-001, 002 |
+| resident-internal | `residents`, `owners`, `tenants`, `staff` | resident-management-service | RES-INT-001 |
+| property-internal | `units`, `buildings`, `floors`, `unit-types`, `ownerships` | property-unit-service | PROP-INT-001..004 |
+| lease-internal | `leases`, `occupancies`, `occupants` | lease-occupancy-service | — |
+| billing-internal | `payments`, `balance`, `invoices`, `charge-rules`, `receipts`, `adjustments` | billing-payment-service | BILL-INT-003 |
+| utility-internal | `utility-charges` | utility-charge-service | UTIL-INT-002 |
+| operations-internal | `maintenance-requests`, `work-orders`, `assignments`, `facilities`, `bookings` | operations-service | — |
+| community-internal | `notifications`, `visitors`, `announcements` | community-service | COMM-INT-001..003 |
+
+To give a new resource name to a service, add it to that service's route in `application.yml`.
 
 ## User and public routes
 
@@ -96,33 +108,29 @@ narrow them when those services publish their endpoint lists.
 
 ## Removed routes
 
-The previous configuration contained routes that no contract defines. They were removed and now return
-404: `/api/v1/auth/register`, `/api/v1/properties/**`, `/api/v1/billing/**`, `/api/v1/utilities/**`,
-`/api/v1/maintenance/**`, `/api/v1/operations/**`, `/api/v1/community/**`, `/api/v1/internal/leases/**`,
-`/api/v1/internal/occupancies/**`, `/api/v1/internal/invoices/**`, `/api/v1/internal/balance/**`, and the
-Operations `/api/v1/internal/{maintenance-requests,work-orders,facilities,bookings}/**` routes.
+The previous configuration contained public routes that no contract defines. They were removed and now
+return 404: `/api/v1/auth/register`, `/api/v1/properties/**`, `/api/v1/billing/**`, `/api/v1/utilities/**`,
+`/api/v1/maintenance/**`, `/api/v1/operations/**` and `/api/v1/community/**`.
 
-## Open contract questions
+## Project decisions and open questions
 
-The shared Project A documents disagree on the points below. Where they conflict, the Gateway follows the
-cross-service API registry. Each point needs confirmation from the teams involved.
+These are points where the Gateway deviates from, or chooses between, the shared Project A documents.
 
-1. **Billing unit balance path.** The registry defines BILL-INT-001 as
-   `GET /api/v1/internal/units/{unitId}/balance`; the Gateway specification lists
-   `GET /api/v1/internal/balance/{unitId}`. Only the registry path is routed.
-2. **Internal allow-list.** The Gateway specification's example caller matrix differs from the registry's
-   per-API consumer lists. For example, it leaves out property-unit-service as a caller, and
-   lease/billing/resident → community notifications. The Gateway uses the registry's consumer lists.
-3. **Utility-charge dependencies.** The registry's dependency matrix says utility-charge-service may call
-   property-unit and lease-occupancy "where required", but those APIs' consumer lists don't include
-   utility-charge-service. Those calls are denied (403) until the registry is updated.
-4. **Environment variable names.** The JWT standard names the keys `IDENTITY_JWT_PUBLIC_KEY` /
+1. **Internal access is open to all registered services (decision).** The shared documents call for a
+   per-endpoint allow-list of calling services. By project decision the Gateway only verifies that the caller
+   is a registered service with a valid Service JWT; endpoint-level caller rules belong to each backend.
+2. **Internal routing by resource ownership (decision).** Instead of routing only the endpoints listed in
+   the cross-service API registry, any internal path is forwarded to the owner of its resource. This also
+   covers both billing balance paths that the documents disagree on
+   (`/api/v1/internal/units/{unitId}/balance` in the registry, `/api/v1/internal/balance/{unitId}` in the
+   Gateway specification).
+3. **Environment variable names.** The JWT standard names the keys `IDENTITY_JWT_PUBLIC_KEY` /
    `GATEWAY_JWT_PRIVATE_KEY`; the Gateway specification uses `IDENTITY_PUBLIC_KEY` / `GATEWAY_PRIVATE_KEY`
    and `*_SERVICE_URI`. The Gateway uses the Gateway specification's names, plus `GATEWAY_JWT_EXPIRES_IN`
    from the JWT standard.
-5. **Role rules.** Route-level role checks are expected, but no document says which roles may use which
+4. **Role rules.** Route-level role checks are expected, but no document says which roles may use which
    route. The Gateway checks that roles are canonical and leaves role authorization to the backends.
-6. **CORS origins.** The Gateway specification asks for configured frontend origins only. By project
-   decision the Gateway also accepts `FRONTEND_ALLOWED_ORIGINS=*`, including in production. This is
+5. **CORS origins (decision).** The Gateway specification asks for configured frontend origins only. By
+   project decision the Gateway also accepts `FRONTEND_ALLOWED_ORIGINS=*`, including in production. This is
    paired with CORS credentials disabled, since tokens travel in the `Authorization` header and cookies are
    never used.
