@@ -19,7 +19,7 @@ public record RouteAccessPolicy(String routeId, Access access, String targetServ
     public static final String INTERNAL_PREFIX = "/api/v1/internal/";
 
     public enum Access {
-        /** No authentication (only {@code POST /api/v1/auth/login} and backend OpenAPI documents). */
+        /** No authentication (login, registration, password reset, and backend OpenAPI documents). */
         PUBLIC,
         /** User JWT required. */
         USER,

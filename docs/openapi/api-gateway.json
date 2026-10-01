@@ -4196,6 +4196,136 @@
         "security": []
       }
     },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "identity-access-service"
+        ],
+        "summary": "identity-auth → identity-access-service",
+        "description": "**Target service:** `identity-access-service`  \n**Type:** external  \n**Authentication:** none  \n**Failure behaviour:** backend responses and business errors pass through unchanged; unreachable/timed-out backend returns 503 DEPENDENCY_UNAVAILABLE.",
+        "operationId": "identity-auth-caa4c09a",
+        "responses": {
+          "2XX": {
+            "description": "Backend response, passed through unchanged"
+          },
+          "404": {
+            "description": "ROUTE_NOT_FOUND"
+          },
+          "503": {
+            "description": "DEPENDENCY_UNAVAILABLE"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "identity-access-service"
+        ],
+        "summary": "identity-auth → identity-access-service",
+        "description": "**Target service:** `identity-access-service`  \n**Type:** external  \n**Authentication:** none  \n**Failure behaviour:** backend responses and business errors pass through unchanged; unreachable/timed-out backend returns 503 DEPENDENCY_UNAVAILABLE.",
+        "operationId": "identity-auth-244fcc2e",
+        "responses": {
+          "2XX": {
+            "description": "Backend response, passed through unchanged"
+          },
+          "404": {
+            "description": "ROUTE_NOT_FOUND"
+          },
+          "503": {
+            "description": "DEPENDENCY_UNAVAILABLE"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "tags": [
+          "identity-access-service"
+        ],
+        "summary": "identity-auth → identity-access-service",
+        "description": "**Target service:** `identity-access-service`  \n**Type:** external  \n**Authentication:** none  \n**Failure behaviour:** backend responses and business errors pass through unchanged; unreachable/timed-out backend returns 503 DEPENDENCY_UNAVAILABLE.",
+        "operationId": "identity-auth-5ad0a610",
+        "responses": {
+          "2XX": {
+            "description": "Backend response, passed through unchanged"
+          },
+          "404": {
+            "description": "ROUTE_NOT_FOUND"
+          },
+          "503": {
+            "description": "DEPENDENCY_UNAVAILABLE"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/me/password": {
+      "put": {
+        "tags": [
+          "identity-access-service"
+        ],
+        "summary": "identity-auth-change-password → identity-access-service",
+        "description": "**Target service:** `identity-access-service`  \n**Type:** external  \n**Authentication:** User JWT (re-signed as Gateway User JWT)  \n**Failure behaviour:** backend responses and business errors pass through unchanged; unreachable/timed-out backend returns 503 DEPENDENCY_UNAVAILABLE.",
+        "operationId": "identity-auth-change-password-a105efdb",
+        "responses": {
+          "2XX": {
+            "description": "Backend response, passed through unchanged"
+          },
+          "404": {
+            "description": "ROUTE_NOT_FOUND"
+          },
+          "503": {
+            "description": "DEPENDENCY_UNAVAILABLE"
+          },
+          "401": {
+            "description": "Authentication failed (see error.code)"
+          },
+          "403": {
+            "description": "FORBIDDEN / SERVICE_NOT_ALLOWED"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "identity-access-service"
+        ],
+        "summary": "identity-auth-logout → identity-access-service",
+        "description": "**Target service:** `identity-access-service`  \n**Type:** external  \n**Authentication:** User JWT (re-signed as Gateway User JWT)  \n**Failure behaviour:** backend responses and business errors pass through unchanged; unreachable/timed-out backend returns 503 DEPENDENCY_UNAVAILABLE.",
+        "operationId": "identity-auth-logout-a07ab941",
+        "responses": {
+          "2XX": {
+            "description": "Backend response, passed through unchanged"
+          },
+          "404": {
+            "description": "ROUTE_NOT_FOUND"
+          },
+          "503": {
+            "description": "DEPENDENCY_UNAVAILABLE"
+          },
+          "401": {
+            "description": "Authentication failed (see error.code)"
+          },
+          "403": {
+            "description": "FORBIDDEN / SERVICE_NOT_ALLOWED"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [

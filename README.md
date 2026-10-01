@@ -40,7 +40,8 @@ generic proxy endpoint. Paths are forwarded unchanged. Full table: [docs/gateway
 
 ## 5. Authentication
 
-Only `POST /api/v1/auth/login` (and the read-only backend OpenAPI documents) are public. All other
+Public (no token): `POST /api/v1/auth/login`, `/register`, `/forgot-password`, `/reset-password`, and
+the read-only backend OpenAPI documents. All other
 `/api/v1` routes require a User JWT; all `/api/v1/internal/**` routes require a Service JWT.
 Details: [docs/security.md](docs/security.md).
 
@@ -153,13 +154,20 @@ Without a profile every value must come from environment variables; a missing va
 Copy-Item .env.example .env
 ```
 
+The gateway joins the shared Docker network `projecta-network`. Create it once per host (backend
+services running on the same host join it too):
+
+```powershell
+docker network create projecta-network
+```
+
 ```powershell
 docker compose up -d --build
 ```
 
 The image contains no keys; `./keys` is mounted read-only at `/app/keys`. Compose refuses to start if a
-required variable is missing. In the integrated Project A compose, put the backends on the same network
-and set the `*_SERVICE_URI` values to their service names.
+required variable is missing. Backends on `projecta-network` are reached by service name (e.g.
+`IDENTITY_SERVICE_URI=http://identity-access-service:8080`); backends on other hosts by their URL.
 
 ## 18. Testing
 

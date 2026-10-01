@@ -51,4 +51,5 @@ services:
 
 networks:
   projecta-network:
-    driver: bridge
+    name: projecta-network
+    external: true

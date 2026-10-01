@@ -83,6 +83,8 @@ class GatewayIntegrationTest {
     @CsvSource({
             // Group 1 — identity-access-service
             "GET,    /api/v1/auth/me,                                      identity-access-service",
+            "POST,   /api/v1/auth/logout,                                  identity-access-service",
+            "PUT,    /api/v1/auth/me/password,                             identity-access-service",
             "GET,    /api/v1/users,                                        identity-access-service",
             "POST,   /api/v1/users,                                        identity-access-service",
             "PATCH,  /api/v1/users/u1/status,                              identity-access-service",
@@ -243,7 +245,9 @@ class GatewayIntegrationTest {
     @ParameterizedTest(name = "not routed: {0} {1}")
     @CsvSource({
             // Obsolete / never-contracted paths and wrong methods
-            "POST,   /api/v1/auth/register",
+            "GET,    /api/v1/auth/register",
+            "GET,    /api/v1/auth/logout",
+            "POST,   /api/v1/auth/unknown",
             "GET,    /api/v1/properties",
             "GET,    /api/v1/billing",
             "GET,    /api/v1/utilities",
@@ -272,6 +276,28 @@ class GatewayIntegrationTest {
     }
 
     // ================= Authentication boundary =================
+
+    @ParameterizedTest(name = "public: POST {0}")
+    @CsvSource({"/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password"})
+    void publicAuthEndpoints_needNoToken_andDropCallerAuthorization(String path) {
+        client.post().uri(path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer caller.supplied.token")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody().jsonPath("$.service").isEqualTo("identity-access-service");
+        assertEquals(path, LAST_PATH.get("identity-access-service"));
+        assertNull(LAST_HEADERS.get("identity-access-service").getFirst(HttpHeaders.AUTHORIZATION));
+    }
+
+    @ParameterizedTest(name = "needs user token: {0} {1}")
+    @CsvSource({"POST, /api/v1/auth/logout", "PUT, /api/v1/auth/me/password", "GET, /api/v1/auth/me"})
+    void userAuthEndpoints_requireToken(String method, String path) {
+        client.method(HttpMethod.valueOf(method)).uri(path)
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.error.code").isEqualTo("MISSING_TOKEN");
+        assertTrue(LAST_PATH.isEmpty());
+    }
 
     @Test
     void login_isPublic_andForwardedWithoutCallerAuthorization() {

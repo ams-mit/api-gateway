@@ -61,8 +61,10 @@ To give a new resource name to a service, add it to that service's route in `app
 
 | Route ID | Methods | Path | Target | Access |
 |---|---|---|---|---|
-| identity-auth | POST | `/api/v1/auth/login` | identity-access-service | public |
+| identity-auth | POST | `/api/v1/auth/login`, `/register`, `/forgot-password`, `/reset-password` | identity-access-service | public |
 | identity-auth-me | GET | `/api/v1/auth/me` | identity-access-service | user |
+| identity-auth-logout | POST | `/api/v1/auth/logout` | identity-access-service | user |
+| identity-auth-change-password | PUT | `/api/v1/auth/me/password` | identity-access-service | user |
 | identity-users | GET, POST, PUT, PATCH | `/api/v1/users/**` | identity-access-service | user |
 | identity-roles | GET, POST, PUT, PATCH, DELETE | `/api/v1/roles/**` | identity-access-service | user |
 | identity-permissions | GET | `/api/v1/permissions` | identity-access-service | user |
@@ -109,7 +111,7 @@ narrow them when those services publish their endpoint lists.
 ## Removed routes
 
 The previous configuration contained public routes that no contract defines. They were removed and now
-return 404: `/api/v1/auth/register`, `/api/v1/properties/**`, `/api/v1/billing/**`, `/api/v1/utilities/**`,
+return 404: `/api/v1/properties/**`, `/api/v1/billing/**`, `/api/v1/utilities/**`,
 `/api/v1/maintenance/**`, `/api/v1/operations/**` and `/api/v1/community/**`.
 
 ## Project decisions and open questions
@@ -134,3 +136,7 @@ These are points where the Gateway deviates from, or chooses between, the shared
    project decision the Gateway also accepts `FRONTEND_ALLOWED_ORIGINS=*`, including in production. This is
    paired with CORS credentials disabled, since tokens travel in the `Authorization` header and cookies are
    never used.
+6. **Extra identity auth endpoints (decision).** The Gateway specification lists only `login` and `me` under
+   `/api/v1/auth`. identity-access-service also provides `register`, `forgot-password` and `reset-password`
+   (public) and `logout` and `PUT me/password` (logged-in user), so the Gateway routes them with the same
+   access rules identity applies itself.

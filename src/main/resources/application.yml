@@ -156,14 +156,26 @@ spring:
               metadata: { access: blocked, service: lease-occupancy-service }
 
             # ================= Group 1: identity-access-service =================
+            # Public authentication endpoints (no token). register / forgot-password / reset-password are
+            # project additions beyond the Gateway specification, matching identity-access-service's own rules.
             - id: identity-auth
               uri: ${projecta.services.identity-access-service}
-              predicates: [Method=POST, "Path=/api/v1/auth/login"]
+              predicates: [Method=POST, "Path=/api/v1/auth/login,/api/v1/auth/register,/api/v1/auth/forgot-password,/api/v1/auth/reset-password"]
               metadata: { access: public, service: identity-access-service }
 
             - id: identity-auth-me
               uri: ${projecta.services.identity-access-service}
               predicates: [Method=GET, "Path=/api/v1/auth/me"]
+              metadata: { access: user, service: identity-access-service }
+
+            - id: identity-auth-logout
+              uri: ${projecta.services.identity-access-service}
+              predicates: [Method=POST, "Path=/api/v1/auth/logout"]
+              metadata: { access: user, service: identity-access-service }
+
+            - id: identity-auth-change-password
+              uri: ${projecta.services.identity-access-service}
+              predicates: [Method=PUT, "Path=/api/v1/auth/me/password"]
               metadata: { access: user, service: identity-access-service }
 
             - id: identity-users
